@@ -1,6 +1,6 @@
 export GLUE_DIR="../data/glue_data"
 
-python run_classifier.py \
+python3 run_classifier.py \
   --task_name MRPC \
   --do_train \
   --do_eval \
