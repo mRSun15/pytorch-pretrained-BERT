@@ -46,7 +46,7 @@ PRETRAINED_MODEL_ARCHIVE_MAP = {
     'bert-base-chinese': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-chinese.tar.gz",
 }
 BERT_CONFIG_NAME = 'bert_config.json'
-TF_WEIGHTS_NAME = 'model.ckpt'
+TF_WEIGHTS_NAME = 'bert_model.ckpt'
 
 def load_tf_weights_in_bert(model, tf_checkpoint_path):
     """ Load tf checkpoints in a pytorch model
@@ -554,7 +554,7 @@ class BertPreTrainedModel(nn.Module):
         kwargs.pop('state_dict', None)
         cache_dir = kwargs.get('cache_dir', None)
         kwargs.pop('cache_dir', None)
-        from_tf = kwargs.get('from_tf', False)
+        from_tf = kwargs.get('from_tf', True)
         kwargs.pop('from_tf', None)
 
         if pretrained_model_name_or_path in PRETRAINED_MODEL_ARCHIVE_MAP:
