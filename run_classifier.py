@@ -26,6 +26,7 @@ import sys
 
 import numpy as np
 import torch
+from torch import optim
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
                               TensorDataset)
 from torch.utils.data.distributed import DistributedSampler
@@ -41,6 +42,7 @@ from pytorch_pretrained_bert.tokenization import BertTokenizer
 from pytorch_pretrained_bert.optimization import BertAdam, WarmupLinearSchedule
 
 logger = logging.getLogger(__name__)
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 class InputExample(object):
@@ -401,6 +403,187 @@ class WnliProcessor(DataProcessor):
                 InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
+class AmazonProcessor(DataProcessor):
+    """Processor for the Amazon data set ."""
+    def calculate_task_num(self,data_dir):
+        with open(data_dir+'/workspace.filtered.list', 'r') as train_f:
+            train_list = train_f.readlines()
+        self.train_task_num = len(train_list)*3
+
+        with open(data_dir+'/workspace.target.list', 'r') as test_f:
+            test_list = test_f.readlines()
+        self.test_task_num = len(test_list)*3
+    
+        return self.train_task_num, self.test_task_num
+
+    def _read_file(self,dataname):
+        with open(dataname, "r") as f:
+            reader = csv.reader(f, delimiter="\t")
+            lines = []
+            for line in reader:
+                lines.append(line)
+            return lines
+
+    def _divide_tasks(self,data_name, type):
+        task_class = ['t2', 't5', 't4']
+        tasks = []
+        total_len = 0
+        for task in task_class:
+            file_name = data_name+'.'+task+'.'+type
+            print(file_name)
+            task_data = self._read_file(file_name)
+            tasks.append(task_data)
+            total_len = total_len+len(task_data)
+
+        return tasks, total_len
+
+    def _get_examples(self, data_dir, filter_name, type):
+    
+        tasks = []
+        labels = []
+        total_len = 0
+        with open(os.path.join(data_dir, filter_name), 'r') as f:
+            task_list = f.readlines()
+            task_list = [name.strip() for name in task_list]
+        for task_name in task_list:
+            diverse_task, task_len = self._divide_tasks(os.path.join(data_dir, task_name), type)
+            tasks.extend(diverse_task)
+            total_len += task_len
+        return tasks, total_len
+
+    def load_all_data(self, data_dir):
+        self.max_train_number = 0
+        self.max_dev_number = 0
+        self.max_test_number = 0
+        self.train_tasks,self.train_number = self._get_examples(data_dir, 'workspace.filtered.list', 'train')
+        self.dev_tasks,self.dev_number = self._get_examples(data_dir, 'workspace.filtered.list', 'dev')
+        self.test_tasks,self.test_number = self._get_examples(data_dir, 'workspace.filtered.list', 'test')
+        self.fsl_train,self.fsl_train_number = self._get_examples(data_dir, 'workspace.target.list', 'train')
+        self.fsl_dev,self.fsl_dev_number = self._get_examples(data_dir, 'workspace.target.list', 'dev')
+        self.fsl_test,self.fsl_test_number = self._get_examples(data_dir, 'workspace.target.list', 'test')
+        self.train_examples = []
+        self.train_labels = []
+        self.dev_examples = []
+        self.dev_labels = []
+        self.test_examples = []
+        self.test_labels = []
+        self.fsl_train_examples = []
+        self.fsl_train_labels = []
+        self.fsl_dev_examples = []
+        self.fsl_dev_labels = []
+        self.fsl_test_examples = []
+        self.fsl_test_labels = []
+        for id in self.train_task_num:
+            examples, labels = self.get_train_examples(data_dir, id)
+            self.train_examples.append(examples)
+            self.train_labels.append(labels)
+            examples, labels = self.get_dev_examples(data_dir,id)
+            self.dev_examples.append(examples)
+            self.dev_labels.append(labels)
+            examples, labels = self.get_test_examples(data_dir, id)
+            self.test_examples.append(examples)
+            self.test_labels.append(labels)
+        for id in self.test_task_num:
+            examples, labels = self.get_fsl_train_examples(data_dir, id)
+            self.fsl_train_examples.append(examples)
+            self.fsl_train_labels.append(labels)
+            examples, labels = self.get_fsl_dev_examples(data_dir, id)
+            self.fsl_dev_examples.append(examples)
+            self.fsl_dev_labels.append(labels)
+            examples, labels = self.get_fsl_test_examples(data_dir, id)
+            self.fsl_test_examples.append(examples)
+            self.fsl_test_labels.append(labels)
+
+        
+
+    def get_train_examples(self, data_dir, task_id=0):
+        return self._create_examples(self.train_tasks[task_id],"train",task_id) 
+
+    def get_dev_examples(self, data_dir,task_id=0):
+        """See base class."""
+        return self._create_examples(self.dev_tasks[task_id],"dev",task_id) 
+
+    def get_test_examples(self, data_dir,task_id=0):
+        """See base class."""
+        return self._create_examples(self.test_tasks[task_id],"test",task_id)
+
+    def get_fsl_train_examples(self, data_dir, task_id=0):
+        
+        return self._create_examples(self.fsl_train[task_id],"train",task_id) 
+
+    def get_fsl_dev_examples(self, data_dir,task_id=0):
+        """See base class."""
+        return self._create_examples(self.fsl_dev[task_id],"dev",task_id) 
+
+    def get_fsl_test_examples(self, data_dir,task_id=0):
+        """See base class."""
+        return self._create_examples(self.fsl_dev[task_id],"test",task_id)
+
+
+    def get_labels(self):
+            
+        """See base class."""
+        return ["-1", "1"]
+
+    def get_next_batch(self, B, N, K, Q, set_type, task_id):
+        '''
+        B: batch size.
+        N: the number of relations for each batch(2)
+        K: the number of support instances for each relation
+        Q: the number of query instances for each relation
+        return: support_set, query_set, query_label
+        '''
+        support = []
+        query = []
+        if set_type = 'train':
+            examples = self.train_examples[task_id]
+            labels = self.train_labels[task_id]
+        elif set_type = 'fsl_train':
+            examples = self.fsl_train_examples[task_id]
+            labels = self.fsl_train_labels[task_id]
+        elif set_type = 'test':
+            examples = self.test_examples[task_id]
+            labels = self.test_labels[task_id]
+        elif set_type = 'fsl_test':
+            examples = self.fsl_test_examples[task_id]
+            labels = self.fsl_test_labels[task_id]
+        label_names = self.get_labels()
+        true_exp_indices = [i for i, e in enumerate(labels) if e == label_names[0]]
+        false_exp_indices = [i for i, e in enumerate(labels) if e == label_names[1]]
+
+        for one_sample in range(B):
+            select_indices = np.random.choice(true_exp_indices, K+Q, False)
+            support.append(examples[select_indices])
+            select_indices = np.random.choice(false_exp_indices, K+Q, False)
+            support.append(examples[select_indices])
+        
+        return support, query
+
+    def _create_examples(self, lines, set_type, set_id):
+        """Creates examples for the training and dev sets."""
+        examples = []
+        labels = []
+        for (i, line) in enumerate(lines):    
+            guid = "%s-%s-%s" % (set_type,set_id, i)
+            if set_type == "test":
+                text_a = tokenization.convert_to_unicode(line[0])
+                label = "-1"
+            else:
+                try:
+                    text_a = tokenization.convert_to_unicode(line[0])
+                    label = tokenization.convert_to_unicode(line[1])
+                except:
+                    print(line)
+            examples.append(
+                InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
+            labels.append(label)
+
+        return examples, labels
+
+
+
+
+
 
 def convert_examples_to_features(examples, label_list, max_seq_length,
                                  tokenizer, output_mode):
@@ -557,6 +740,8 @@ def compute_metrics(task_name, preds, labels):
         return {"acc": simple_accuracy(preds, labels)}
     elif task_name == "wnli":
         return {"acc": simple_accuracy(preds, labels)}
+    elif task_name == "Amazon":
+        return {"acc": simple_accuracy(preds, labels)}
     else:
         raise KeyError(task_name)
 
@@ -606,7 +791,7 @@ def main():
                         action='store_true',
                         help="Set this flag if you are using an uncased model.")
     parser.add_argument("--train_batch_size",
-                        default=32,
+                        default=4,
                         type=int,
                         help="Total batch size for training.")
     parser.add_argument("--eval_batch_size",
@@ -671,6 +856,7 @@ def main():
         "qnli": QnliProcessor,
         "rte": RteProcessor,
         "wnli": WnliProcessor,
+        "Amazon":AmazonProcessor,
     }
 
     output_modes = {
@@ -683,6 +869,7 @@ def main():
         "qnli": "classification",
         "rte": "classification",
         "wnli": "classification",
+        "Amazon":"classification"
     }
 
     if args.local_rank == -1 or args.no_cuda:
@@ -731,12 +918,20 @@ def main():
     output_mode = output_modes[task_name]
 
     label_list = processor.get_labels()
+    print("read data!")
+    train_task_number, fsl_task_number = processor.calculate_task_num(FLAGS.data_dir)
+    processor.load_all_data(FLAGS.data_dir)
+    print("load finished!")
+    
     num_labels = len(label_list)
 
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
 
     train_examples = None
     num_train_optimization_steps = None
+    N_shot = 5
+    N_query = 5
+    
     if args.do_train:
         train_examples = processor.get_train_examples(args.data_dir)
         num_train_optimization_steps = int(
@@ -792,6 +987,7 @@ def main():
                              lr=args.learning_rate,
                              warmup=args.warmup_proportion,
                              t_total=num_train_optimization_steps)
+        # optimizer = optim.Adam(optimizer_grouped_parameters, lr=args.learning_rate)
 
     global_step = 0
     nb_tr_steps = 0
@@ -820,6 +1016,20 @@ def main():
         train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size)
 
         model.train()
+
+
+        # ###MAML code
+        # update_lr = 5e-2
+        # for i in range(task_num):
+        #     logits = model(input_ids, segment_ids, input_mask, labels=None)
+        #     if output_mode = "classification":
+        #         loss_fct = CrossEntropyLoss()
+        #         loss = loss_fct(logits.view(-1, num_labels), label_ids.view(-1))
+        #         grad = torch.autograd.grad(loss, model.parameters())
+        #         fast_weights = list(map(lambda p: p[1] - update_lr * p[0], zip(grad, model.parameters())))
+        #         with torch.no_grad():
+        #             logits
+
         for _ in trange(int(args.num_train_epochs), desc="Epoch"):
             tr_loss = 0
             nb_tr_examples, nb_tr_steps = 0, 0
@@ -841,6 +1051,7 @@ def main():
                     loss = loss.mean() # mean() to average on multi-gpu.
                 if args.gradient_accumulation_steps > 1:
                     loss = loss / args.gradient_accumulation_steps
+                
 
                 if args.fp16:
                     optimizer.backward(loss)
