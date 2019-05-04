@@ -1122,9 +1122,8 @@ def main():
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         for task_id in trange(fsl_task_number, desc="Task"):
-           
-
-            eval_examples = processor.get_dev_examples(args.data_dir)
+            
+            eval_examples = processor.get_fsl_test_examples(args.data_dir, task_id)
             eval_features = convert_examples_to_features(
                 eval_examples, label_list, args.max_seq_length, tokenizer, output_mode)
             logger.info("***** Running evaluation *****")
@@ -1207,7 +1206,7 @@ def main():
             result['global_step'] = global_step
             # result['loss'] = loss
 
-            output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
+            output_eval_file = os.path.join(args.output_dir, "eval_results_"+str(task_id)+".txt")
             with open(output_eval_file, "w") as writer:
                 logger.info("***** Eval results *****")
                 for key in sorted(result.keys()):
