@@ -1032,7 +1032,7 @@ def main():
                     sup_logits = model(all_support_input, all_support_seg_ids, all_support_mask, labels=None)
                     qry_logits = model(all_query_input, all_query_seg_ids, all_query_mask, labels=None)
                     sup_logits = sup_logits.view(-1,N,N_shot,proto_hidden)
-                    qry_logits = qry_logits.view(-1,N,N_query,proto_hidden)
+                    qry_logits = qry_logits.view(-1,N*N_query,proto_hidden)
                     B = sup_logits.size(0)
                     sup_logits = torch.mean(sup_logits, 2)
                     logits = -(torch.pow(sup_logits.unsqueeze(1)-qry_logits.unsqueeze(2), 2)).sum(3)
