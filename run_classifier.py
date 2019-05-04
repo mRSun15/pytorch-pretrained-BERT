@@ -520,6 +520,15 @@ class AmazonProcessor(DataProcessor):
         """See base class."""
         return self._create_examples(self.fsl_dev[task_id],"test",task_id)
 
+    def get_fsl_support(self, data_dir, task_id=0):
+        examples, labels = self.get_fsl_train_examples(data_dir, task_id)
+        label_names = self.get_labels()
+        true_exp_indices = [i for i, e in enumerate(labels) if e == label_names[0]]
+        false_exp_indices = [i for i, e in enumerate(labels) if e == label_names[1]]
+        support = []
+        support.extend([examples[i] for i in true_exp_indices])
+        support.extend([examples[i] for i in false_exp_indices])
+        return support
 
     def get_labels(self):
             
@@ -747,6 +756,13 @@ def compute_metrics(task_name, preds, labels):
     else:
         raise KeyError(task_name)
 
+def accuracy(pred, label):
+    '''
+    pred: prediction result
+    label: label with whatever size
+    return: Accuracy[A single Value]
+    '''
+    return torch.mean((pred.view(-1)) == (label.view(-1)).type(torch.FloatTensor))
 
 def main():
     parser = argparse.ArgumentParser()
@@ -935,7 +951,7 @@ def main():
     N_shot = 5
     N_query = 1
     N = 2
-    train_batch_s = 2
+    train_batch_s = 4
     if args.do_train:
         # train_examples = processor.get_train_examples(args.data_dir)
         num_train_optimization_steps = int(
@@ -1105,75 +1121,98 @@ def main():
 
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
-        eval_examples = processor.get_dev_examples(args.data_dir)
-        eval_features = convert_examples_to_features(
-            eval_examples, label_list, args.max_seq_length, tokenizer, output_mode)
-        logger.info("***** Running evaluation *****")
-        logger.info("  Num examples = %d", len(eval_examples))
-        logger.info("  Batch size = %d", args.eval_batch_size)
-        all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
-        all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
-        all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
+        for task_id in trange(fsl_task_number, desc="Task"):
+           
 
-        if output_mode == "classification":
-            all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
-        elif output_mode == "regression":
-            all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.float)
+            eval_examples = processor.get_dev_examples(args.data_dir)
+            eval_features = convert_examples_to_features(
+                eval_examples, label_list, args.max_seq_length, tokenizer, output_mode)
+            logger.info("***** Running evaluation *****")
+            logger.info("  Num examples = %d", len(eval_examples))
+            logger.info("  Batch size = %d", args.eval_batch_size)
+            all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
+            all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
+            all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
 
-        eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
-        # Run prediction for full data
-        eval_sampler = SequentialSampler(eval_data)
-        eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)
-
-        model.eval()
-        eval_loss = 0
-        nb_eval_steps = 0
-        preds = []
-
-        for input_ids, input_mask, segment_ids, label_ids in tqdm(eval_dataloader, desc="Evaluating"):
-            input_ids = input_ids.to(device)
-            input_mask = input_mask.to(device)
-            segment_ids = segment_ids.to(device)
-            label_ids = label_ids.to(device)
-
-            with torch.no_grad():
-                logits = model(input_ids, segment_ids, input_mask, labels=None)
-
-            # create eval loss and other metric required by the task
             if output_mode == "classification":
-                loss_fct = CrossEntropyLoss()
-                tmp_eval_loss = loss_fct(logits.view(-1, num_labels), label_ids.view(-1))
+                all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
             elif output_mode == "regression":
-                loss_fct = MSELoss()
-                tmp_eval_loss = loss_fct(logits.view(-1), label_ids.view(-1))
-            
-            eval_loss += tmp_eval_loss.mean().item()
-            nb_eval_steps += 1
-            if len(preds) == 0:
-                preds.append(logits.detach().cpu().numpy())
-            else:
-                preds[0] = np.append(
-                    preds[0], logits.detach().cpu().numpy(), axis=0)
+                all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.float)
 
-        eval_loss = eval_loss / nb_eval_steps
-        preds = preds[0]
-        if output_mode == "classification":
-            preds = np.argmax(preds, axis=1)
-        elif output_mode == "regression":
-            preds = np.squeeze(preds)
-        result = compute_metrics(task_name, preds, all_label_ids.numpy())
-        loss = tr_loss/nb_tr_steps if args.do_train else None
+            eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+            # Run prediction for full data
+            eval_sampler = SequentialSampler(eval_data)
+            eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)
 
-        result['eval_loss'] = eval_loss
-        result['global_step'] = global_step
-        result['loss'] = loss
+            model.eval()
+            eval_loss = 0
+            nb_eval_steps = 0
+            preds = []
+             
+            support_examples = processor.get_fsl_support(args.data_dir, task_id)
+            support_features = convert_examples_to_features(
+                support_examples, label_list, args.max_seq_length, tokenizer, output_mode
+            )
+            support_input = torch.tensor([f.input_ids for f in support_examples], dtype=torch.long).to(device)
+            support_mask = torch.tensor([f.input_mask for f in support_examples], dtype=torch.long).to(device)
+            support_seg = torch.tensor([f.segment_ids for f in support_examples], dtype=torch.long).to(device)
 
-        output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
-        with open(output_eval_file, "w") as writer:
-            logger.info("***** Eval results *****")
-            for key in sorted(result.keys()):
-                logger.info("  %s = %s", key, str(result[key]))
-                writer.write("%s = %s\n" % (key, str(result[key])))
+            N_query = args.eval_batch_size
+
+            for input_ids, input_mask, segment_ids, label_ids in tqdm(eval_dataloader, desc="Evaluating"):
+                input_ids = input_ids.to(device)
+                input_mask = input_mask.to(device)
+                segment_ids = segment_ids.to(device)
+                label_ids = label_ids.to(device)
+
+                with torch.no_grad():
+                    sup_logits = model(support_input, support_seg, support_mask, labels=None)
+                    qry_logits = model(input_ids, segment_ids, input_mask, labels=None)
+
+                # proto calculation
+                sup_logits = sup_logits.view(-1,N,N_shot,proto_hidden)
+                qry_logits = qry_logits.view(-1,N*N_query,proto_hidden)
+                B = sup_logits.size(0)
+                sup_logits = torch.mean(sup_logits, 2)
+                logits = -(torch.pow(sup_logits.unsqueeze(1)-qry_logits.unsqueeze(2), 2)).sum(3)
+                # print(logits.shape)
+                _,pred = torch.max(logits.view(-1,N), 1)
+
+                # create eval loss and other metric required by the task
+                if output_mode == "classification":
+                    loss_fct = CrossEntropyLoss()
+                    tmp_eval_loss = loss_fct(logits.view(-1, num_labels), label_ids.view(-1))
+                elif output_mode == "regression":
+                    loss_fct = MSELoss()
+                    tmp_eval_loss = loss_fct(logits.view(-1), label_ids.view(-1))
+                
+                eval_loss += tmp_eval_loss.mean().item()
+                nb_eval_steps += 1
+                if len(preds) == 0:
+                    preds.append(logits.detach().cpu().numpy())
+                else:
+                    preds[0] = np.append(
+                        preds[0], logits.detach().cpu().numpy(), axis=0)
+
+            eval_loss = eval_loss / nb_eval_steps
+            preds = preds[0]
+            if output_mode == "classification":
+                preds = np.argmax(preds, axis=1)
+            elif output_mode == "regression":
+                preds = np.squeeze(preds)
+            result = compute_metrics(task_name, preds, all_label_ids.numpy())
+            # loss = tr_loss/nb_tr_steps if args.do_train else None
+
+            result['eval_loss'] = eval_loss
+            result['global_step'] = global_step
+            # result['loss'] = loss
+
+            output_eval_file = os.path.join(args.output_dir, "eval_results.txt")
+            with open(output_eval_file, "w") as writer:
+                logger.info("***** Eval results *****")
+                for key in sorted(result.keys()):
+                    logger.info("  %s = %s", key, str(result[key]))
+                    writer.write("%s = %s\n" % (key, str(result[key])))
 
         # hack for MNLI-MM
         if task_name == "mnli":
