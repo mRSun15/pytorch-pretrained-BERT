@@ -817,7 +817,7 @@ def main():
                         type=int,
                         help="Total batch size for eval.")
     parser.add_argument("--learning_rate",
-                        default=5e-5,
+                        default=5e-4,
                         type=float,
                         help="The initial learning rate for Adam.")
     parser.add_argument("--num_train_epochs",
@@ -1003,11 +1003,11 @@ def main():
                                              t_total=num_train_optimization_steps)
 
     else:
-        optimizer = BertAdam(optimizer_grouped_parameters,
-                             lr=args.learning_rate,
-                             warmup=args.warmup_proportion,
-                             t_total=num_train_optimization_steps)
-        # optimizer = optim.Adam(optimizer_grouped_parameters, lr=args.learning_rate)
+    #     optimizer = BertAdam(optimizer_grouped_parameters,
+    #                          lr=args.learning_rate,
+    #                          warmup=args.warmup_proportion,
+    #                          t_total=num_train_optimization_steps)
+        optimizer = optim.Adam(optimizer_grouped_parameters, lr=args.learning_rate)
 
     global_step = 0
     nb_tr_steps = 0
