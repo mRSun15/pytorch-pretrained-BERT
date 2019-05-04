@@ -581,7 +581,7 @@ class AmazonProcessor(DataProcessor):
             guid = "%s-%s-%s" % (set_type,set_id, i)
             if set_type == "test":
                 text_a = line[0]
-                print(test_a)
+                print(text_a)
                 label = "-1"
             else:
                 try:
