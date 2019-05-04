@@ -536,16 +536,16 @@ class AmazonProcessor(DataProcessor):
         '''
         support = []
         query = []
-        if set_type = 'train':
+        if set_type == 'train':
             examples = self.train_examples[task_id]
             labels = self.train_labels[task_id]
-        elif set_type = 'fsl_train':
+        elif set_type == 'fsl_train':
             examples = self.fsl_train_examples[task_id]
             labels = self.fsl_train_labels[task_id]
-        elif set_type = 'test':
+        elif set_type == 'test':
             examples = self.test_examples[task_id]
             labels = self.test_labels[task_id]
-        elif set_type = 'fsl_test':
+        elif set_type == 'fsl_test':
             examples = self.fsl_test_examples[task_id]
             labels = self.fsl_test_labels[task_id]
         label_names = self.get_labels()
