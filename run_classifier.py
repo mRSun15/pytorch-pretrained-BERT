@@ -494,7 +494,7 @@ class AmazonProcessor(DataProcessor):
             self.fsl_test_examples.append(examples)
             self.fsl_test_labels.append(labels)
 
-    def get_train_task_len(self, data_dir, task_id):
+    def get_train_task_len(self,task_id):
         return len(self.train_examples[task_id])
 
     def get_train_examples(self, data_dir, task_id=0):
