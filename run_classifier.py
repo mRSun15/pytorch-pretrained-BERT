@@ -1170,7 +1170,10 @@ def main():
 
                 # proto calculation
                 sup_logits = sup_logits.view(N,N_shot,proto_hidden)
+                print(sup_logits.shape)
                 qry_logits = qry_logits.view(N_query,proto_hidden)
+                print(sup_logits.shape)
+
                 B = sup_logits.size(0)
                 sup_logits = torch.mean(sup_logits, 2)
                 logits = -(torch.pow(sup_logits.unsqueeze(0)-qry_logits.unsqueeze(1), 2)).sum(2)
