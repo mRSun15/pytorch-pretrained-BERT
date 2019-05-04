@@ -1021,9 +1021,9 @@ def main():
 
                     if output_mode == "classification":
                         support_labels = torch.tensor([f.label_id for f in support_features], dtype=torch.long)
-                        query_labels = torch.tensor([f.label_id for f in query_features], dtype=torch.long)
+                        query_labels = torch.tensor([f.label_id for f in query_features], dtype=torch.long).to(device)
                     elif output_mode == "regression":
-                        all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.float)
+                        all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.float).to(device)
 
 
                     model.train()
