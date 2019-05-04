@@ -857,7 +857,7 @@ def main():
         "qnli": QnliProcessor,
         "rte": RteProcessor,
         "wnli": WnliProcessor,
-        "Amazon":AmazonProcessor,
+        "amazon":AmazonProcessor,
     }
 
     output_modes = {
@@ -870,7 +870,7 @@ def main():
         "qnli": "classification",
         "rte": "classification",
         "wnli": "classification",
-        "Amazon":"classification"
+        "amazon":"classification"
     }
 
     if args.local_rank == -1 or args.no_cuda:
