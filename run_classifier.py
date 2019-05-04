@@ -1013,7 +1013,7 @@ def main():
     nb_tr_steps = 0
     # tr_loss = 0
     if args.do_train:
-        for epoch in trange(args.num_train_epochs, desc="Epochs"):
+        for epoch in trange(int(args.num_train_epochs), desc="Epochs"):
             for task_id in trange(train_task_number,desc="Task"):
                 total_batches = int(processor.get_train_task_len(task_id)/((N_shot+N_query)*train_batch_s*N))
                 logger.info("***** Running training *****")
