@@ -564,18 +564,19 @@ class AmazonProcessor(DataProcessor):
         return support, query
 
     def _create_examples(self, lines, set_type, set_id):
+
         """Creates examples for the training and dev sets."""
         examples = []
         labels = []
         for (i, line) in enumerate(lines):    
             guid = "%s-%s-%s" % (set_type,set_id, i)
             if set_type == "test":
-                text_a = tokenization.convert_to_unicode(line[0])
+                text_a = line[0]
                 label = "-1"
             else:
                 try:
-                    text_a = tokenization.convert_to_unicode(line[0])
-                    label = tokenization.convert_to_unicode(line[1])
+                    text_a = line[0]
+                    label = line[1]
                 except:
                     print(line)
             examples.append(
