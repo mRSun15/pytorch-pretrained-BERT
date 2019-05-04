@@ -581,7 +581,7 @@ class AmazonProcessor(DataProcessor):
             guid = "%s-%s-%s" % (set_type,set_id, i)
             if set_type == "test":
                 text_a = line[0]
-                print(text_a)
+                # print(text_a)
                 label = "-1"
             else:
                 try:
@@ -1123,7 +1123,7 @@ def main():
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         for task_id in trange(fsl_task_number, desc="Task"):
             
-            eval_examples = processor.get_fsl_test_examples(args.data_dir, task_id)
+            eval_examples,_ = processor.get_fsl_test_examples(args.data_dir, task_id)
             eval_features = convert_examples_to_features(
                 eval_examples, label_list, args.max_seq_length, tokenizer, output_mode)
             logger.info("***** Running evaluation *****")
