@@ -1005,7 +1005,7 @@ def main():
                 logger.info("  Batch size = %d", total_batches)
                 logger.info("  Num steps = %d", num_train_optimization_steps)
                 tr_loss = 0
-                for step in tqdm(total_batches,desc="Iteration"):
+                for step in tqdm(range(total_batches),desc="Iteration"):
                     train_support, train_query = processor.get_next_batch(train_batch_s, N, N_shot, N_query, 'train', task_id)
                     support_features = convert_examples_to_features(
                         train_support, label_list, args.max_seq_length, tokenizer, output_mode)
@@ -1025,7 +1025,6 @@ def main():
                     elif output_mode == "regression":
                         all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.float)
 
-                    train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
 
                     model.train()
                     batch = tuple(t.to(device) for t in batch)
