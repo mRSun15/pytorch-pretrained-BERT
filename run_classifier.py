@@ -1098,7 +1098,7 @@ def main():
                     #         with torch.no_grad():
                     #             logits
 
-    if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
+    # if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         # # Save a trained model, configuration and tokenizer
         # model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
 
@@ -1111,10 +1111,10 @@ def main():
         # tokenizer.save_vocabulary(args.output_dir)
 
         # Load a trained model and vocabulary that you have fine-tuned
-        model = BertForSequenceClassification.from_pretrained(args.output_dir, num_labels=proto_hidden)
-        tokenizer = BertTokenizer.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
-    else:
-        model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=proto_hidden)
+        # model = BertForSequenceClassification.from_pretrained(args.output_dir, num_labels=proto_hidden)
+        # tokenizer = BertTokenizer.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
+    # else:
+    #     model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=proto_hidden)
     model.to(device)
 
 
