@@ -554,12 +554,11 @@ class AmazonProcessor(DataProcessor):
 
         for one_sample in range(B):
             select_indices = np.random.choice(true_exp_indices, K+Q, False)
-            print(select_indices)
-            support.extend(examples[select_indices[:K]])
-            query.extend(examples[select_indices[K:]])
+            support.extend([examples[i] for i in select_indices[:K]])
+            query.extend(examples[i] for i in select_indices[K:])
             select_indices = np.random.choice(false_exp_indices, K+Q, False)
-            support.extend(examples[select_indices[:K]])
-            query.extend(examples[select_indices[K:]])
+            support.extend(examples[i] for i in select_indices[:K])
+            query.extend(examples[i] for i in select_indices[K:])
             
 
         return support, query
