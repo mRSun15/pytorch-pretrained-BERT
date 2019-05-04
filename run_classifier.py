@@ -1152,9 +1152,9 @@ def main():
             support_features = convert_examples_to_features(
                 support_examples, label_list, args.max_seq_length, tokenizer, output_mode
             )
-            support_input = torch.tensor([f.input_ids for f in support_examples], dtype=torch.long).to(device)
-            support_mask = torch.tensor([f.input_mask for f in support_examples], dtype=torch.long).to(device)
-            support_seg = torch.tensor([f.segment_ids for f in support_examples], dtype=torch.long).to(device)
+            support_input = torch.tensor([f.input_ids for f in support_features], dtype=torch.long).to(device)
+            support_mask = torch.tensor([f.input_mask for f in support_features], dtype=torch.long).to(device)
+            support_seg = torch.tensor([f.segment_ids for f in support_features], dtype=torch.long).to(device)
 
             N_query = args.eval_batch_size
 
