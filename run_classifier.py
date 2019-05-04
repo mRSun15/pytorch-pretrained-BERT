@@ -920,8 +920,8 @@ def main():
 
     label_list = processor.get_labels()
     print("read data!")
-    train_task_number, fsl_task_number = processor.calculate_task_num(FLAGS.data_dir)
-    processor.load_all_data(FLAGS.data_dir)
+    train_task_number, fsl_task_number = processor.calculate_task_num(args.data_dir)
+    processor.load_all_data(args.data_dir)
     print("load finished!")
     
     num_labels = len(label_list)
