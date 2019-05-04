@@ -660,7 +660,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
         else:
             raise KeyError(output_mode)
 
-        if ex_index < 1:
+        if ex_index < 0:
             logger.info("*** Example ***")
             logger.info("guid: %s" % (example.guid))
             logger.info("tokens: %s" % " ".join(
@@ -1036,7 +1036,7 @@ def main():
                     B = sup_logits.size(0)
                     sup_logits = torch.mean(sup_logits, 2)
                     logits = -(torch.pow(sup_logits.unsqueeze(1)-qry_logits.unsqueeze(2), 2)).sum(3)
-                    print(logits.shape)
+                    # print(logits.shape)
                     _,pred = torch.max(logits.view(-1,N), 1)
 
                     if output_mode == "classification":
