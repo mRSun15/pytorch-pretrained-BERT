@@ -1012,7 +1012,7 @@ def main():
     global_step = 0
     nb_tr_steps = 0
     # tr_loss = 0
-    if args.do_train:
+    if args.do_train and False:
         for epoch in trange(int(args.num_train_epochs), desc="Epochs"):
             for task_id in trange(train_task_number,desc="Task"):
                 total_batches = int(processor.get_train_task_len(task_id)/((N_shot+N_query)*train_batch_s*N))
@@ -1098,18 +1098,17 @@ def main():
                     #         with torch.no_grad():
                     #             logits
 
-
     if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
-        # Save a trained model, configuration and tokenizer
-        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+        # # Save a trained model, configuration and tokenizer
+        # model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
 
-        # If we save using the predefined names, we can load using `from_pretrained`
-        output_model_file = os.path.join(args.output_dir, WEIGHTS_NAME)
-        output_config_file = os.path.join(args.output_dir, CONFIG_NAME)
+        # # If we save using the predefined names, we can load using `from_pretrained`
+        # output_model_file = os.path.join(args.output_dir, WEIGHTS_NAME)
+        # output_config_file = os.path.join(args.output_dir, CONFIG_NAME)
 
-        torch.save(model_to_save.state_dict(), output_model_file)
-        model_to_save.config.to_json_file(output_config_file)
-        tokenizer.save_vocabulary(args.output_dir)
+        # torch.save(model_to_save.state_dict(), output_model_file)
+        # model_to_save.config.to_json_file(output_config_file)
+        # tokenizer.save_vocabulary(args.output_dir)
 
         # Load a trained model and vocabulary that you have fine-tuned
         model = BertForSequenceClassification.from_pretrained(args.output_dir, num_labels=proto_hidden)
