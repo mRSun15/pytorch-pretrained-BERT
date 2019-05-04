@@ -793,7 +793,7 @@ def main():
                         action='store_true',
                         help="Set this flag if you are using an uncased model.")
     parser.add_argument("--train_batch_size",
-                        default=12,
+                        default=32,
                         type=int,
                         help="Total batch size for training.")
     parser.add_argument("--eval_batch_size",
@@ -935,7 +935,7 @@ def main():
     N_shot = 5
     N_query = 1
     N = 2
-    train_batch_s = 1
+    train_batch_s = 2
     if args.do_train:
         # train_examples = processor.get_train_examples(args.data_dir)
         num_train_optimization_steps = int(
