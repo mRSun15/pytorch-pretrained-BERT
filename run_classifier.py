@@ -494,7 +494,8 @@ class AmazonProcessor(DataProcessor):
             self.fsl_test_examples.append(examples)
             self.fsl_test_labels.append(labels)
 
-        
+    def get_train_task_len(self, data_dir, task_id):
+        return len(self.train_examples[task_id])
 
     def get_train_examples(self, data_dir, task_id=0):
         return self._create_examples(self.train_tasks[task_id],"train",task_id) 
@@ -553,10 +554,13 @@ class AmazonProcessor(DataProcessor):
 
         for one_sample in range(B):
             select_indices = np.random.choice(true_exp_indices, K+Q, False)
-            support.append(examples[select_indices])
+            support.extend(examples[select_indices[:K]])
+            query.extend(examples[select_indices[K:]])
             select_indices = np.random.choice(false_exp_indices, K+Q, False)
-            support.append(examples[select_indices])
-        
+            support.extend(examples[select_indices[:K]])
+            query.extend(examples[select_indices[K:]])
+            
+
         return support, query
 
     def _create_examples(self, lines, set_type, set_id):
@@ -579,9 +583,6 @@ class AmazonProcessor(DataProcessor):
             labels.append(label)
 
         return examples, labels
-
-
-
 
 
 
@@ -791,7 +792,7 @@ def main():
                         action='store_true',
                         help="Set this flag if you are using an uncased model.")
     parser.add_argument("--train_batch_size",
-                        default=4,
+                        default=12,
                         type=int,
                         help="Total batch size for training.")
     parser.add_argument("--eval_batch_size",
@@ -924,18 +925,20 @@ def main():
     print("load finished!")
     
     num_labels = len(label_list)
+    proto_hidden = 100
 
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
 
     train_examples = None
     num_train_optimization_steps = None
     N_shot = 5
-    N_query = 5
-    
+    N_query = 1
+    N = 2
+    train_batch_s = 1
     if args.do_train:
-        train_examples = processor.get_train_examples(args.data_dir)
+        # train_examples = processor.get_train_examples(args.data_dir)
         num_train_optimization_steps = int(
-            len(train_examples) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
+            processor.train_number/ args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
         if args.local_rank != -1:
             num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
 
@@ -943,7 +946,7 @@ def main():
     cache_dir = args.cache_dir if args.cache_dir else os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), 'distributed_{}'.format(args.local_rank))
     model = BertForSequenceClassification.from_pretrained(args.bert_model,
               cache_dir=cache_dir,
-              num_labels=num_labels)
+              num_labels=proto_hidden) # num_labels as proto_network's embedding size
     if args.fp16:
         model.half()
     model.to(device)
@@ -991,87 +994,94 @@ def main():
 
     global_step = 0
     nb_tr_steps = 0
-    tr_loss = 0
+    # tr_loss = 0
     if args.do_train:
-        train_features = convert_examples_to_features(
-            train_examples, label_list, args.max_seq_length, tokenizer, output_mode)
-        logger.info("***** Running training *****")
-        logger.info("  Num examples = %d", len(train_examples))
-        logger.info("  Batch size = %d", args.train_batch_size)
-        logger.info("  Num steps = %d", num_train_optimization_steps)
-        all_input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long)
-        all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
-        all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
+        for epoch in trange(3, desc="Epochs"):
+            for task_id in trange(train_task_number,desc="Task"):
+                total_batches = int(processor.get_train_task_len(task_id)/((K+Q)*train_batch_s*N))
+                logger.info("***** Running training *****")
+                logger.info("  Num examples = %d", processor.get_train_task_len(task_id))
+                logger.info("  Batch size = %d", total_batches)
+                logger.info("  Num steps = %d", num_train_optimization_steps)
+                tr_loss = 0
+                for step in tqdm(total_batches,desc="Iteration"):
+                    train_support, train_query = processor.get_next_batch(train_batch_s, N, K, Q, 'train', task_id)
+                    support_features = convert_examples_to_features(
+                        train_support, label_list, args.max_seq_length, tokenizer, output_mode)
+                    query_features = convert_examples_to_features(
+                        train_query, label_list, args.max_seq_length, tokenizer, output_mode
+                    )
+                    all_support_input = torch.tensor([f.input_ids for f in support_features], dtype=torch.long).to(device)
+                    all_support_mask = torch.tensor([f.input_mask for f in support_features], dtype=torch.long).to(device)
+                    all_support_seg_ids = torch.tensor([f.segment_ids for f in support_features], dtype=torch.long).to(device)
+                    all_query_input = torch.tensor([f.input_ids for f in query_features], dtype=torch.long).to(device)
+                    all_query_mask = torch.tensor([f.input_mask for f in query_features], dtype=torch.long).to(device)
+                    all_query_seg_ids = torch.tensor([f.segment_ids for f in query_features], dtype = torch.long).to(device)
 
-        if output_mode == "classification":
-            all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long)
-        elif output_mode == "regression":
-            all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.float)
+                    if output_mode == "classification":
+                        support_labels = torch.tensor([f.label_id for f in support_features], dtype=torch.long)
+                        query_labels = torch.tensor([f.label_id for f in query_features], dtype=torch.long)
+                    elif output_mode == "regression":
+                        all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.float)
 
-        train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
-        if args.local_rank == -1:
-            train_sampler = RandomSampler(train_data)
-        else:
-            train_sampler = DistributedSampler(train_data)
-        train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size)
+                    train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
 
-        model.train()
+                    model.train()
+                    batch = tuple(t.to(device) for t in batch)
 
+                    # define a new function to compute loss values for both output_modes
+                    sup_logits = model(all_support_input, all_support_seg_ids, all_support_mask, labels=None)
+                    qry_logits = model(all_query_input, all_query_seg_ids, all_query_mask, labels=None)
+                    sup_logits = sup_logits.view(-1,N,K,proto_hidden)
+                    qry_logits = qry_logits.view(-1,N,K,proto_hidden)
+                    B = sup_logits.size(0)
+                    sup_logits = torch.mean(sup_logits, 2)
+                    logits = -(torch.pow(sup_logits.unsqueeze(1)-qry_logits.unsqueeze(2), 2)).sum(3)
+                    _,pred = torch.max(logits.view(-1,N), 1)
 
-        # ###MAML code
-        # update_lr = 5e-2
-        # for i in range(task_num):
-        #     logits = model(input_ids, segment_ids, input_mask, labels=None)
-        #     if output_mode = "classification":
-        #         loss_fct = CrossEntropyLoss()
-        #         loss = loss_fct(logits.view(-1, num_labels), label_ids.view(-1))
-        #         grad = torch.autograd.grad(loss, model.parameters())
-        #         fast_weights = list(map(lambda p: p[1] - update_lr * p[0], zip(grad, model.parameters())))
-        #         with torch.no_grad():
-        #             logits
+                    if output_mode == "classification":
+                        loss_fct = CrossEntropyLoss()
+                        loss = loss_fct(logits.view(-1, num_labels), query_labels.view(-1))
+                    elif output_mode == "regression":
+                        loss_fct = MSELoss()
+                        loss = loss_fct(logits.view(-1), label_ids.view(-1))
 
-        for _ in trange(int(args.num_train_epochs), desc="Epoch"):
-            tr_loss = 0
-            nb_tr_examples, nb_tr_steps = 0, 0
-            for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
-                batch = tuple(t.to(device) for t in batch)
-                input_ids, input_mask, segment_ids, label_ids = batch
+                    if n_gpu > 1:
+                        loss = loss.mean() # mean() to average on multi-gpu.
+                    if args.gradient_accumulation_steps > 1:
+                        loss = loss / args.gradient_accumulation_steps
+                    
 
-                # define a new function to compute loss values for both output_modes
-                logits = model(input_ids, segment_ids, input_mask, labels=None)
-
-                if output_mode == "classification":
-                    loss_fct = CrossEntropyLoss()
-                    loss = loss_fct(logits.view(-1, num_labels), label_ids.view(-1))
-                elif output_mode == "regression":
-                    loss_fct = MSELoss()
-                    loss = loss_fct(logits.view(-1), label_ids.view(-1))
-
-                if n_gpu > 1:
-                    loss = loss.mean() # mean() to average on multi-gpu.
-                if args.gradient_accumulation_steps > 1:
-                    loss = loss / args.gradient_accumulation_steps
-                
-
-                if args.fp16:
-                    optimizer.backward(loss)
-                else:
-                    loss.backward()
-
-                tr_loss += loss.item()
-                nb_tr_examples += input_ids.size(0)
-                nb_tr_steps += 1
-                if (step + 1) % args.gradient_accumulation_steps == 0:
                     if args.fp16:
-                        # modify learning rate with special warm up BERT uses
-                        # if args.fp16 is False, BertAdam is used that handles this automatically
-                        lr_this_step = args.learning_rate * warmup_linear.get_lr(global_step/num_train_optimization_steps,
-                                                                                 args.warmup_proportion)
-                        for param_group in optimizer.param_groups:
-                            param_group['lr'] = lr_this_step
-                    optimizer.step()
-                    optimizer.zero_grad()
-                    global_step += 1
+                        optimizer.backward(loss)
+                    else:
+                        loss.backward()
+
+                    tr_loss += loss.item()
+                    if (step + 1) % args.gradient_accumulation_steps == 0:
+                        if args.fp16:
+                            # modify learning rate with special warm up BERT uses
+                            # if args.fp16 is False, BertAdam is used that handles this automatically
+                            lr_this_step = args.learning_rate * warmup_linear.get_lr(global_step/num_train_optimization_steps,
+                                                                                    args.warmup_proportion)
+                            for param_group in optimizer.param_groups:
+                                param_group['lr'] = lr_this_step
+                        optimizer.step()
+                        optimizer.zero_grad()
+                        global_step += 1
+                    
+                    # ###MAML code
+                    # update_lr = 5e-2
+                    # for i in range(task_num):
+                    #     logits = model(input_ids, segment_ids, input_mask, labels=None)
+                    #     if output_mode = "classification":
+                    #         loss_fct = CrossEntropyLoss()
+                    #         loss = loss_fct(logits.view(-1, num_labels), label_ids.view(-1))
+                    #         grad = torch.autograd.grad(loss, model.parameters())
+                    #         fast_weights = list(map(lambda p: p[1] - update_lr * p[0], zip(grad, model.parameters())))
+                    #         with torch.no_grad():
+                    #             logits
+
 
     if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         # Save a trained model, configuration and tokenizer
@@ -1086,11 +1096,13 @@ def main():
         tokenizer.save_vocabulary(args.output_dir)
 
         # Load a trained model and vocabulary that you have fine-tuned
-        model = BertForSequenceClassification.from_pretrained(args.output_dir, num_labels=num_labels)
+        model = BertForSequenceClassification.from_pretrained(args.output_dir, num_labels=proto_hidden)
         tokenizer = BertTokenizer.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
     else:
-        model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=num_labels)
+        model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=proto_hidden)
     model.to(device)
+
+
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         eval_examples = processor.get_dev_examples(args.data_dir)
