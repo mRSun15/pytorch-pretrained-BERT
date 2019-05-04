@@ -1169,11 +1169,11 @@ def main():
                     qry_logits = model(input_ids, segment_ids, input_mask, labels=None)
 
                 # proto calculation
-                sup_logits = sup_logits.view(-1,N,N_shot,proto_hidden)
-                qry_logits = qry_logits.view(-1,N_query,proto_hidden)
+                sup_logits = sup_logits.view(N,N_shot,proto_hidden)
+                qry_logits = qry_logits.view(N_query,proto_hidden)
                 B = sup_logits.size(0)
                 sup_logits = torch.mean(sup_logits, 2)
-                logits = -(torch.pow(sup_logits.unsqueeze(1)-qry_logits.unsqueeze(2), 2)).sum(3)
+                logits = -(torch.pow(sup_logits.unsqueeze(0)-qry_logits.unsqueeze(1), 2)).sum(2)
                 # print(logits.shape)
                 _,pred = torch.max(logits.view(-1,N), 1)
 
