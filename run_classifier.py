@@ -473,7 +473,7 @@ class AmazonProcessor(DataProcessor):
         self.fsl_dev_labels = []
         self.fsl_test_examples = []
         self.fsl_test_labels = []
-        for id in self.train_task_num:
+        for id in range(self.train_task_num):
             examples, labels = self.get_train_examples(data_dir, id)
             self.train_examples.append(examples)
             self.train_labels.append(labels)
@@ -483,7 +483,7 @@ class AmazonProcessor(DataProcessor):
             examples, labels = self.get_test_examples(data_dir, id)
             self.test_examples.append(examples)
             self.test_labels.append(labels)
-        for id in self.test_task_num:
+        for id in range(self.test_task_num):
             examples, labels = self.get_fsl_train_examples(data_dir, id)
             self.fsl_train_examples.append(examples)
             self.fsl_train_labels.append(labels)
