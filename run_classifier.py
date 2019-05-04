@@ -1027,7 +1027,6 @@ def main():
 
 
                     model.train()
-                    batch = tuple(t.to(device) for t in batch)
 
                     # define a new function to compute loss values for both output_modes
                     sup_logits = model(all_support_input, all_support_seg_ids, all_support_mask, labels=None)
