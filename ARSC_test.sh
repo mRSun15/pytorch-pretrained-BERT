@@ -3,7 +3,6 @@ export GLUE_DIR="data/Amazon_few_shot"
 python3 run_classifier.py \
   --task_name Amazon \
   --do_train \
-  --do_eval False \
   --do_lower_case \
   --data_dir $GLUE_DIR \
   --bert_model bert-base-uncased-file \
