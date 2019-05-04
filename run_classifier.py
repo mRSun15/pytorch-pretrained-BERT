@@ -999,14 +999,14 @@ def main():
     if args.do_train:
         for epoch in trange(3, desc="Epochs"):
             for task_id in trange(train_task_number,desc="Task"):
-                total_batches = int(processor.get_train_task_len(task_id)/((K+Q)*train_batch_s*N))
+                total_batches = int(processor.get_train_task_len(task_id)/((N_shot+N_query)*train_batch_s*N))
                 logger.info("***** Running training *****")
                 logger.info("  Num examples = %d", processor.get_train_task_len(task_id))
                 logger.info("  Batch size = %d", total_batches)
                 logger.info("  Num steps = %d", num_train_optimization_steps)
                 tr_loss = 0
                 for step in tqdm(total_batches,desc="Iteration"):
-                    train_support, train_query = processor.get_next_batch(train_batch_s, N, K, Q, 'train', task_id)
+                    train_support, train_query = processor.get_next_batch(train_batch_s, N, N_shot, N_query, 'train', task_id)
                     support_features = convert_examples_to_features(
                         train_support, label_list, args.max_seq_length, tokenizer, output_mode)
                     query_features = convert_examples_to_features(
@@ -1033,8 +1033,8 @@ def main():
                     # define a new function to compute loss values for both output_modes
                     sup_logits = model(all_support_input, all_support_seg_ids, all_support_mask, labels=None)
                     qry_logits = model(all_query_input, all_query_seg_ids, all_query_mask, labels=None)
-                    sup_logits = sup_logits.view(-1,N,K,proto_hidden)
-                    qry_logits = qry_logits.view(-1,N,K,proto_hidden)
+                    sup_logits = sup_logits.view(-1,N,N_shot,proto_hidden)
+                    qry_logits = qry_logits.view(-1,N,N_query,proto_hidden)
                     B = sup_logits.size(0)
                     sup_logits = torch.mean(sup_logits, 2)
                     logits = -(torch.pow(sup_logits.unsqueeze(1)-qry_logits.unsqueeze(2), 2)).sum(3)
