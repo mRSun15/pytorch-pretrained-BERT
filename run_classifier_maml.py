@@ -1028,7 +1028,7 @@ def main():
 
                     model.train()
                     # define a new function to compute loss values for both output_modes
-                    logits = model(support_input_ids, support_seg_ids, support_mask_ids, label=None)
+                    logits = model(support_input_ids, support_seg_ids, support_mask_ids, labels=None)
 
                     if output_mode == "classification":
                         loss_fct = CrossEntropyLoss()
