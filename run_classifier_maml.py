@@ -35,6 +35,7 @@ from tqdm import tqdm, trange
 from torch.nn import CrossEntropyLoss, MSELoss
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import matthews_corrcoef, f1_score
+from copy import deepcopy
 
 from pytorch_pretrained_bert.file_utils import PYTORCH_PRETRAINED_BERT_CACHE, WEIGHTS_NAME, CONFIG_NAME
 from pytorch_pretrained_bert.modeling import BertForSequenceClassification, BertConfig
@@ -528,6 +529,7 @@ class AmazonProcessor(DataProcessor):
         support = []
         support.extend([examples[i] for i in true_exp_indices])
         support.extend([examples[i] for i in false_exp_indices])
+        random.shuffle(support)
         return support
 
     def get_labels(self):
@@ -546,28 +548,27 @@ class AmazonProcessor(DataProcessor):
         support = []
         query = []
         if set_type == 'train':
-            examples = self.train_examples[task_id]
-            labels = self.train_labels[task_id]
-        elif set_type == 'fsl_train':
-            examples = self.fsl_train_examples[task_id]
-            labels = self.fsl_train_labels[task_id]
-        elif set_type == 'test':
-            examples = self.test_examples[task_id]
-            labels = self.test_labels[task_id]
-        elif set_type == 'fsl_test':
-            examples = self.fsl_test_examples[task_id]
-            labels = self.fsl_test_labels[task_id]
+            train_examples = self.train_examples[task_id]
+            train_labels = self.train_labels[task_id]
+            dev_examples = self.dev_examples[task_id]
+            dev_labels = self.dev_labels[task_id]
+        else:
+            return support, query
         label_names = self.get_labels()
-        true_exp_indices = [i for i, e in enumerate(labels) if e == label_names[0]]
-        false_exp_indices = [i for i, e in enumerate(labels) if e == label_names[1]]
+        true_train_indices = [i for i, e in enumerate(train_labels) if e == label_names[0]]
+        true_dev_indices = [i for i, e in enumerate(dev_labels) if e == label_names[0]]
+        false_train_indices = [i for i, e in enumerate(train_labels) if e == label_names[1]]
+        false_dev_indices = [i for i, e in enumerate(dev_labels) if e == label_names[1]]
 
         for one_sample in range(B):
-            select_indices = np.random.choice(true_exp_indices, K+Q, False)
-            support.extend([examples[i] for i in select_indices[:K]])
-            query.extend(examples[i] for i in select_indices[K:])
-            select_indices = np.random.choice(false_exp_indices, K+Q, False)
-            support.extend(examples[i] for i in select_indices[:K])
-            query.extend(examples[i] for i in select_indices[K:])
+            select_indices = np.random.choice(true_train_indices, K, False)
+            support.extend([train_examples[i] for i in select_indices])
+            select_indices = np.random.choice(true_dev_indices, Q, False)
+            query.extend([dev_examples[i] for i in select_indices])
+            select_indices = np.random.choice(false_train_indices, K, False)
+            support.extend([train_examples[i] for i in select_indices])
+            select_indices = np.random.choice(false_dev_indices, Q, False)
+            query.extend([dev_examples[i] for i in select_indices])
             
 
         return support, query
@@ -818,9 +819,17 @@ def main():
                         type=int,
                         help="Total batch size for eval.")
     parser.add_argument("--learning_rate",
-                        default=1e-3,
+                        default=1e-5,
                         type=float,
                         help="The initial learning rate for Adam.")
+    parser.add_argument("--inner_learning_rate",
+                        default=2e-6,
+                        type=float,
+                        help="The inner learning rate for Adam")
+    parser.add_argument("--outer_learning_rate",
+                        default=1e-5,
+                        type=float,
+                        help="The meta learning rate for Adam, actual learning rate!")
     parser.add_argument("--num_train_epochs",
                         default=2.0,
                         type=float,
@@ -949,14 +958,17 @@ def main():
 
     train_examples = None
     num_train_optimization_steps = None
+
+    Inner_epochs = 4
+    N_iteration = 10000
     N_shot = 5
     N_query = 3
+    N_task = 5
     N_class = 2
-    train_batch_s = 2
+    train_batch_s = 1
     if args.do_train :
         # train_examples = processor.get_train_examples(args.data_dir)
-        num_train_optimization_steps = int(
-            processor.train_number/ args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
+        num_train_optimization_steps = N_iteration*(N_shot+N_query)*N_class*N_task
         if args.local_rank != -1:
             num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
 
@@ -980,128 +992,81 @@ def main():
 
     # Prepare optimizer
     param_optimizer = list(model.named_parameters())
-    no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
-    optimizer_grouped_parameters = [
-        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
-        {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
-        ]
-    if args.fp16:
-        try:
-            from apex.optimizers import FP16_Optimizer
-            from apex.optimizers import FusedAdam
-        except ImportError:
-            raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
-
-        optimizer = FusedAdam(optimizer_grouped_parameters,
-                              lr=args.learning_rate,
-                              bias_correction=False,
-                              max_grad_norm=1.0)
-        if args.loss_scale == 0:
-            optimizer = FP16_Optimizer(optimizer, dynamic_loss_scale=True)
-        else:
-            optimizer = FP16_Optimizer(optimizer, static_loss_scale=args.loss_scale)
-        warmup_linear = WarmupLinearSchedule(warmup=args.warmup_proportion,
-                                             t_total=num_train_optimization_steps)
-
-    else:
-        optimizer = BertAdam(optimizer_grouped_parameters,
-                             lr=args.learning_rate,
-                             warmup=args.warmup_proportion,
-                             t_total=num_train_optimization_steps)
-        # optimizer = optim.Adam(optimizer_grouped_parameters, lr=args.learning_rate)
+    # no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
+    # optimizer_grouped_parameters = [
+    #     {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
+    #     {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}]
+    # optimizer = BertAdam(optimizer_grouped_parameters,
+    #                         lr=args.learning_rate,
+    #                         warmup=args.warmup_proportion,
+    #                         t_total=num_train_optimization_steps)
+    optimizer = optim.Adam(model.parameters(), lr=args.inner_learning_rate)
+    # Meta_optimizer = optim.Adam(model.parameters(), lr=args.outer_learning_rate)
 
     global_step = 0
     nb_tr_steps = 0
     # tr_loss = 0
     if args.do_train :
-        for epoch in trange(int(args.num_train_epochs), desc="Epochs"):
-            task_list = np.random.permutation(np.arange(train_task_number))
-            for task_id in tqdm(task_list,desc="Task"):
-                total_batches = int(processor.get_train_task_len(task_id)/((N_shot+N_query)*train_batch_s*N_class))
-                logger.info("***** Running training *****")
-                logger.info("  Num examples = %d", processor.get_train_task_len(task_id))
-                logger.info("  Batch size = %d", total_batches)
-                logger.info("  Num steps = %d", num_train_optimization_steps)
-                tr_loss = 0
-                for step in tqdm(range(total_batches),desc="Iteration"):
+        task_list = np.random.permutation(np.arange(train_task_number))
+        for epoch in trange(int(N_iteration), desc="Iterations"):
+            selected_tasks = np.random.choice(task_list, N_task, replace=False)
+            weight_before = deepcopy(model.state_dict())
+            update_vars = []
+            for task_id in tqdm(selected_tasks,desc="Task"):
+                for _ in range(Inner_epochs):
                     train_support, train_query = processor.get_next_batch(train_batch_s, N_class, N_shot, N_query, 'train', task_id)
                     support_features = convert_examples_to_features(
                         train_support, label_list, args.max_seq_length, tokenizer, output_mode)
-                    query_features = convert_examples_to_features(
-                        train_query, label_list, args.max_seq_length, tokenizer, output_mode
-                    )
-                    all_support_input = torch.tensor([f.input_ids for f in support_features], dtype=torch.long).to(device)
-                    all_support_mask = torch.tensor([f.input_mask for f in support_features], dtype=torch.long).to(device)
-                    all_support_seg_ids = torch.tensor([f.segment_ids for f in support_features], dtype=torch.long).to(device)
-                    all_query_input = torch.tensor([f.input_ids for f in query_features], dtype=torch.long).to(device)
-                    all_query_mask = torch.tensor([f.input_mask for f in query_features], dtype=torch.long).to(device)
-                    all_query_seg_ids = torch.tensor([f.segment_ids for f in query_features], dtype = torch.long).to(device)
 
+                    support_input_ids = torch.tensor([f.input_ids for f in support_features], dtype=torch.long).to(device)
+                    support_mask_ids = torch.tensor([f.input_mask for f in support_features], dtype=torch.long).to(device)
+                    support_seg_ids = torch.tensor([f.segment_ids for f in support_features], dtype=torch.long).to(device)
                     if output_mode == "classification":
-                        support_labels = torch.tensor([f.label_id for f in support_features], dtype=torch.long)
-                        query_labels = torch.tensor([f.label_id for f in query_features], dtype=torch.long).to(device)
+                        support_labels = torch.tensor([f.label_id for f in support_features], dtype=torch.long).to(device)
                     elif output_mode == "regression":
-                        all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.float).to(device)
-
+                        all_label_ids = torch.tensor([f.label_id for f in support_features], dtype=torch.float).to(device)
 
                     model.train()
-
                     # define a new function to compute loss values for both output_modes
-                    sup_logits = model(all_support_input, all_support_seg_ids, all_support_mask, labels=None)
-                    qry_logits = model(all_query_input, all_query_seg_ids, all_query_mask, labels=None)
-                    sup_logits = sup_logits.view(-1,N_class,N_shot,proto_hidden)
-                    qry_logits = qry_logits.view(-1,N_class*N_query,proto_hidden)
-                    B = sup_logits.size(0)
-                    sup_logits = torch.mean(sup_logits, 2)
-                    logits = -(torch.pow(sup_logits.unsqueeze(1)-qry_logits.unsqueeze(2), 2)).sum(3)
-                    # print(logits.shape)
-                    _,pred = torch.max(logits.view(-1,N_class), 1)
+                    logits = model(support_input_ids, support_seg_ids, support_mask_ids, label=None)
 
                     if output_mode == "classification":
                         loss_fct = CrossEntropyLoss()
-                        loss = loss_fct(logits.view(-1, num_labels), query_labels.view(-1))
+                        loss = loss_fct(logits.view(-1, num_labels), support_labels.view(-1))
                     elif output_mode == "regression":
                         loss_fct = MSELoss()
-                        loss = loss_fct(logits.view(-1), label_ids.view(-1))
+                        loss = loss_fct(logits.view(-1), support_labels.view(-1))
                     
-                    result = compute_metrics(task_name, pred.cpu().numpy(), query_labels.cpu().numpy())
-                    logger.info("Batch %d ,Accuracy: %s", step,result["acc"])
+                    # result = compute_metrics(task_name, pred.cpu().numpy(), query_labels.cpu().numpy())
+                    # logger.info("Batch %d ,Accuracy: %s", step,result["acc"])
 
                     if n_gpu > 1:
                         loss = loss.mean() # mean() to average on multi-gpu.
                     if args.gradient_accumulation_steps > 1:
                         loss = loss / args.gradient_accumulation_steps
                     
-
-                    if args.fp16:
-                        optimizer.backward(loss)
-                    else:
-                        loss.backward()
-
-                    tr_loss += loss.item()
-                    if (step + 1) % args.gradient_accumulation_steps == 0:
-                        if args.fp16:
-                            # modify learning rate with special warm up BERT uses
-                            # if args.fp16 is False, BertAdam is used that handles this automatically
-                            lr_this_step = args.learning_rate * warmup_linear.get_lr(global_step/num_train_optimization_steps,
-                                                                                    args.warmup_proportion)
-                            for param_group in optimizer.param_groups:
-                                param_group['lr'] = lr_this_step
-                        optimizer.step()
-                        optimizer.zero_grad()
-                        global_step += 1
-                    
-                    # ###MAML code
-                    # update_lr = 5e-2
-                    # for i in range(task_num):
-                    #     logits = model(input_ids, segment_ids, input_mask, labels=None)
-                    #     if output_mode = "classification":
-                    #         loss_fct = CrossEntropyLoss()
-                    #         loss = loss_fct(logits.view(-1, num_labels), label_ids.view(-1))
-                    #         grad = torch.autograd.grad(loss, model.parameters())
-                    #         fast_weights = list(map(lambda p: p[1] - update_lr * p[0], zip(grad, model.parameters())))
-                    #         with torch.no_grad():
-                                # logits
+                    loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
+                weight_after = deepcopy(model.state_dict())
+                update_vars.append(weight_after)
+                model.load_state_dict(weight_before)
+            new_weight_dict = {}
+            for name in weight_before:
+                new_weight_dict[name] = float(np.mean(list([tmp_weight_dict[name] for tmp_weight_dict in update_vars])))
+                new_weight_dict[name] = weight_before[name]+((new_weight_dict[name]-weight_before)/args.inner_learning_rate)*args.outer_learning_rate
+            model.load_state_dict(new_weight_dict)
+            # ###MAML code
+            # update_lr = 5e-2
+            # for i in range(task_num):
+            #     logits = model(input_ids, segment_ids, input_mask, labels=None)
+            #     if output_mode = "classification":
+            #         loss_fct = CrossEntropyLoss()
+            #         loss = loss_fct(logits.view(-1, num_labels), label_ids.view(-1))
+            #         grad = torch.autograd.grad(loss, model.parameters())
+            #         fast_weights = list(map(lambda p: p[1] - update_lr * p[0], zip(grad, model.parameters())))
+            #         with torch.no_grad():
+                        # logits
 
     if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0) :
         # Save a trained model, configuration and tokenizer
@@ -1125,8 +1090,25 @@ def main():
 
     loss_list = {}
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
+        weight_before = deepcopy(model.state_dict())
         for task_id in trange(fsl_task_number, desc="Task"):
-            
+            for _ in range(Inner_epochs):
+                support_examples = processor.get_fsl_support(args.data_dir, task_id)
+                support_features = convert_examples_to_features(
+                    support_examples, label_list, args.max_seq_length, tokenizer, output_mode
+                )
+                model.train()
+                support_input = torch.tensor([f.input_ids for f in support_features], dtype=torch.long).to(device)
+                support_mask = torch.tensor([f.input_mask for f in support_features], dtype=torch.long).to(device)
+                support_seg = torch.tensor([f.segment_ids for f in support_features], dtype=torch.long).to(device)
+                support_labels = torch.tensor([f.label_id for f in support_features], dtype=torch.long).to(device)
+                
+                logits = model(support_input, support_seg, support_mask, labels=None)
+                loss = CrossEntropyLoss(logits.view(-1, num_labels), support_labels.view(-1))
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+
             eval_examples,_ = processor.get_fsl_test_examples(args.data_dir, task_id)
             eval_features = convert_examples_to_features(
                 eval_examples, label_list, args.max_seq_length, tokenizer, output_mode)
@@ -1151,25 +1133,7 @@ def main():
             eval_loss = 0
             nb_eval_steps = 0
             preds = []
-             
-            support_examples = processor.get_fsl_support(args.data_dir, task_id)
-            support_features = convert_examples_to_features(
-                support_examples, label_list, args.max_seq_length, tokenizer, output_mode
-            )
-            support_input = torch.tensor([f.input_ids for f in support_features], dtype=torch.long).to(device)
-            support_mask = torch.tensor([f.input_mask for f in support_features], dtype=torch.long).to(device)
-            support_seg = torch.tensor([f.segment_ids for f in support_features], dtype=torch.long).to(device)
-            support_labels = torch.tensor([f.label_id for f in support_features], dtype=torch.long)
-            N_query = args.eval_batch_size
-            with torch.no_grad():
-                sup_logits = model(support_input, support_seg, support_mask, labels=None)
-            sup_logits = sup_logits.view(N_class,N_shot,proto_hidden)
-            sup_proto = torch.mean(sup_logits, 1)
-            sup_hidden = sup_logits.view(N_class*N_shot,proto_hidden)    
-            proto_dist = -(torch.pow(sup_proto.unsqueeze(0)-sup_hidden.unsqueeze(1),2)).sum(2)
-            _, pred = torch.max(proto_dist.view(-1,N_class), 1)
-            # print(pred.shape)
-            # print(.shape)
+            
             proto_result = compute_metrics(task_name, pred.cpu().numpy(), support_labels.numpy())
             print("Support Set's Accuracy: ", proto_result)
 
@@ -1180,19 +1144,9 @@ def main():
                 label_ids = label_ids.to(device)
 
                 with torch.no_grad():        
-                    qry_logits = model(input_ids, segment_ids, input_mask, labels=None)
+                    logits = model(input_ids, segment_ids, input_mask, labels=None)
 
-                # proto calculation
-                qry_logits = qry_logits.view(len(input_ids),proto_hidden)
-
-                B = sup_logits.size(0)
-                logits = -(torch.pow(sup_proto.unsqueeze(0)-qry_logits.unsqueeze(1), 2)).sum(2)
-                # print(logits.shape)
-                _,pred = torch.max(logits.view(-1,N_class), 1)
-                # print(pred)
-                # print("support label: ", support_labels.view(-1))
-                # print("query label:", label_ids.view(-1))
-
+                
                 # create eval loss and other metric required by the task
                 if output_mode == "classification":
                     loss_fct = CrossEntropyLoss()
@@ -1229,7 +1183,8 @@ def main():
                 for key in sorted(result.keys()):
                     logger.info("  %s = %s", key, str(result[key]))
                     writer.write("%s = %s\n" % (key, str(result[key])))
-        
+            model.load_state_dict(weight_before)
+            
         for id, acc in loss_list.items():
             print("Task id: ", id, " ---- acc: ", acc)
         print("Average acc is: ", np.mean(list(loss_list.values())))
