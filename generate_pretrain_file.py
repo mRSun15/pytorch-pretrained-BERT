@@ -22,11 +22,6 @@ for task_name in task_list:
             
             for line in reader:
                 out_file.write(line[0])
-                try:
-                    a = line[1]
-                except:
-                    print("file_name:", file_name)
-                    print(line)
 
         out_file.write('\n\n')
 out_file.close()
