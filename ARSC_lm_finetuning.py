@@ -240,6 +240,7 @@ class BERTDataset(Dataset):
             self.random_file.close()
             self.random_file = open(self.corpus_path, "r", encoding=self.encoding)
             line = next(self.random_file).strip()
+        assert len(line) > 0
         return line
 
 
