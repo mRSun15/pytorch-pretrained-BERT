@@ -32,6 +32,8 @@ from tqdm import tqdm, trange
 from pytorch_pretrained_bert.modeling import BertForPreTraining
 from pytorch_pretrained_bert.tokenization import BertTokenizer
 from pytorch_pretrained_bert.optimization import BertAdam, WarmupLinearSchedule
+from torch.nn import CrossEntropyLoss
+
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
@@ -588,7 +590,10 @@ def main():
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                 batch = tuple(t.to(device) for t in batch)
                 input_ids, input_mask, segment_ids, lm_label_ids, is_next = batch
-                loss = model(input_ids, segment_ids, input_mask, lm_label_ids, is_next)
+                # loss = model(input_ids, segment_ids, input_mask, lm_label_ids, is_next)
+                masked_lm_logits_scores, seq_relationship_logits = model(input_ids, segment_ids, input_mask, lm_label_ids)
+                loss_fct = CrossEntropyLoss(ignore_index=-1)
+                loss = loss_fct(masked_lm_logits_scores.view(-1, model.config.vocab_size), lm_label_ids.view(-1))
                 if n_gpu > 1:
                     loss = loss.mean() # mean() to average on multi-gpu.
                 if args.gradient_accumulation_steps > 1:
