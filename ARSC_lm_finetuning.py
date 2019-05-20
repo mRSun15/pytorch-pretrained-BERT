@@ -37,6 +37,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
                     datefmt='%m/%d/%Y %H:%M:%S',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 class BERTDataset(Dataset):
