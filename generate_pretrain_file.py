@@ -23,7 +23,7 @@ for task_name in task_list:
             for line in reader:
                 out_file.write(line[0])
                 try:
-                    print(line[1])
+                    a = line[1]
                 except:
                     print("file_name:", file_name)
                     print(line)
