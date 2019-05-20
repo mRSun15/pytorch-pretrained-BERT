@@ -149,7 +149,8 @@ class BERTDataset(Dataset):
         :return: (str, str, int), sentence 1, sentence 2, isNextSentence Label
         """
         t1, t2 = self.get_corpus_line(index)
-        if random.random() > 0.5:
+        t = random.random()
+        if t > 0.5:
             label = 0
         else:
             t2 = self.get_random_line()
@@ -158,6 +159,7 @@ class BERTDataset(Dataset):
         assert len(t1) > 0
         print(index)
         print(t1)
+        print(t)
         assert len(t2) > 0
         return t1, t2, label
 
