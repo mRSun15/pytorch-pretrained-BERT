@@ -219,8 +219,10 @@ class BERTDataset(Dataset):
                 #pick random line
                 for _ in range(rand_index):
                     line = self.get_next_line()
+                
             #check if our picked random line is really from another doc like we want it to be
             if self.current_random_doc != self.current_doc:
+                print(rand_index, line)
                 break
         return line
 
