@@ -160,6 +160,7 @@ class BERTDataset(Dataset):
         print(index)
         print(t1)
         print(t)
+        print(self.on_memory)
         assert len(t2) > 0
         return t1, t2, label
 
