@@ -221,7 +221,7 @@ class BERTDataset(Dataset):
             if self.current_random_doc != self.current_doc:
                 
                 break
-        print("random Index:", rand_index, line)
+        # print("random Index:", rand_index, line)
         return line
 
     def get_next_line(self):
