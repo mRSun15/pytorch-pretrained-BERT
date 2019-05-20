@@ -215,7 +215,8 @@ class BERTDataset(Dataset):
                 rand_doc = self.all_docs[rand_doc_idx]
                 line = rand_doc[random.randrange(len(rand_doc))]
             else:
-                rand_index = random.randint(1, self.corpus_lines if self.corpus_lines < 1000 else 1000)
+                # rand_index = random.randint(1, self.corpus_lines if self.corpus_lines < 1000 else 1000)
+                rand_index = 892
                 #pick random line
                 for _ in range(rand_index):
                     line = self.get_next_line()
