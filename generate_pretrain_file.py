@@ -19,8 +19,14 @@ for task_name in task_list:
         print(file_name)
         with open(file_name, 'r') as f:
             reader = csv.reader(f, delimiter="\t")
+            
             for line in reader:
                 out_file.write(line[0])
-                print(line[1])
+                try:
+                    print(line[1])
+                except:
+                    print("file_name:", file_name)
+                    print(line)
+
         out_file.write('\n\n')
 out_file.close()
