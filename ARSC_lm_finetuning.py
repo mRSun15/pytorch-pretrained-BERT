@@ -156,6 +156,8 @@ class BERTDataset(Dataset):
             label = 1
 
         assert len(t1) > 0
+        print(index)
+        print(t1)
         assert len(t2) > 0
         return t1, t2, label
 
