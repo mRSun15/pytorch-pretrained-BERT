@@ -18,8 +18,8 @@ python3 run_classifier_maml.py \
   --do_eval \
   --do_lower_case \
   --data_dir $GLUE_DIR \
-  --bert_model bert-base-uncased-file \
+  --bert_model /tmp/Amazon_maml_output3/ \
   --max_seq_length 128 \
   --inner_learning_rate 2e-6 \
   --outer_learning_rate 1e-5 \
-  --output_dir /tmp/Amazon_maml_output/
+  --output_dir /tmp/Amazon_maml_output4/
