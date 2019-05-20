@@ -232,16 +232,16 @@ class BERTDataset(Dataset):
         """ Gets next line of random_file and starts over when reaching end of file"""
         try:
             line = next(self.random_file).strip()
-            
+
             #keep track of which document we are currently looking at to later avoid having the same doc as t1
-            if line == "":
+            while line == "":
                 self.current_random_doc = self.current_random_doc + 1
                 line = next(self.random_file).strip()
         except StopIteration:
             self.random_file.close()
             self.random_file = open(self.corpus_path, "r", encoding=self.encoding)
             line = next(self.random_file).strip()
-        assert len(line) > 0
+        
         return line
 
 
