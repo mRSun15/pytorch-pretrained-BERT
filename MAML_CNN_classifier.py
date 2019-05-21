@@ -186,8 +186,8 @@ for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
         for inner_iter in range(Inner_epochs):
             batch = next(iter(train_iter))
 
-            print(batch.text.size())
-            print(batch.label.size())
+            # print(batch.text.size())
+            # print(batch.label.size())
             logits = model(batch.text)
             loss = criterion(logits.view(-1, num_labels), batch.label.data.view(-1))
             
@@ -231,7 +231,7 @@ for task_id in fsl_task_list:
     batch = next(iter(train_iter))
     for i in range(fsl_epochs):
         logits = model(batch.text)
-        loss = criterion(logits.view(-1, num_labels, batch.label.data.view(-1)))
+        loss = criterion(logits.view(-1, num_labels), batch.label.data.view(-1))
         n_correct = (torch.max(logits, 1)[1].view(batch.label.size()).data == batch.label.data).sum()
         n_size = batch.batch_size
         train_acc = 100. * n_correct / n_size
@@ -248,7 +248,7 @@ for task_id in fsl_task_list:
     for test_batch_idx, test_batch in enumerate(test_iter):
         with torch.no_grad():
             logits = model(test_batch.text)
-        loss = criterion(logits.view(-1, num_labels, test_batch.label.data.view(-1)))
+        loss = criterion(logits.view(-1, num_labels), test_batch.label.data.view(-1))
         n_correct += (torch.max(logits, 1)[1].view(test_batch.label.size()).data == test_batch.label.data).sum()
         n_size += test_batch.batch_size
     test_acc = 100.* n_correct/n_size
