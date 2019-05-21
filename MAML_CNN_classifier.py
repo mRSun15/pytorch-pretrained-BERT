@@ -87,7 +87,7 @@ for i, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
     print('vars(train[0])', vars(train[0]))
     num_batch_total += len(train) / batch_size
 
-TEXT.build_vocab(list_datasets)
+TEXT.build_vocab(list_datasets, vectors = emfilename, vectors_cache = emfilename)
 # TEXT.build_vocab(list_dataset)
 
 # build the vocabulary
