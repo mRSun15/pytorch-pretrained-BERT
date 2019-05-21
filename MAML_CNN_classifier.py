@@ -14,7 +14,7 @@ from DataProcessing.NlcDatasetSingleFile import NlcDatasetSingleFile
 
 batch_size = 10
 seed = 12345678
-gpu = "0"
+gpu = 1
 torch.manual_seed(seed)
 if torch.cuda.is_available():
     torch.cuda.set_device(gpu)
