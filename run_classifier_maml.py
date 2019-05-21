@@ -1155,7 +1155,7 @@ def main():
         weight_before = deepcopy(model.state_dict())
         for task_id in trange(fsl_task_number, desc="Task"):
             model.train()
-            for _ in range(2):
+            for _ in range(3):
                 support_examples = processor.get_fsl_support(args.data_dir, task_id)
                 support_features = convert_examples_to_features(
                     support_examples, label_list, args.max_seq_length, tokenizer, output_mode
