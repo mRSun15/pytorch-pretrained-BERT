@@ -854,7 +854,7 @@ def main():
                         help="The FSL learning rate for Adam!")           
     parser.add_argument("--FSL_epochs",
                         default=1,
-                        type=float,
+                        type=int,
                         help="The FSL learning epochs for training!")                    
     parser.add_argument("--num_train_epochs",
                         default=2.0,
