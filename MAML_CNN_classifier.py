@@ -183,8 +183,8 @@ for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
         for inner_iter in range(Inner_epochs):
             batch = next(iter(train_iter))
 
-            print(batch.text.size())
-            print(batch.label.size())
+
+            print(batch.label)
             logits = model(batch.text)
             loss = criterion(logits.view(-1, num_labels), batch.label.data.view(-1))
             
