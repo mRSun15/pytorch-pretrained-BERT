@@ -40,7 +40,7 @@ class Transpose(nn.Module):
                + 'between=' + str(self.dim1) + ',' + str(self.dim2) + ')'
 
 class CNNModel(nn.Module):
-    def __init__(self, vocab_size, num_labels, emb_size, w_hid_size, h_hid_size, win, batch_size, with_proj=False):
+    def __init__(self, vocab_size, num_labels, emb_size, w_hid_size, h_hid_size, win, with_proj=False):
         super(CNNModel, self).__init__()
 
         self.model = nn.Sequential()
@@ -62,39 +62,14 @@ class CNNModel(nn.Module):
 
         self.model.add_module('max', MaxPool(2))
 
-        self.model.add_module('view4', View(batch_size, h_hid_size))
+        self.model.add_module('view4', View(-1, h_hid_size))
         self.model.add_module('linear2', nn.Linear(h_hid_size, num_labels))
         self.model.add_module('softmax', nn.LogSoftmax())
 
 
     def forward(self, x):
 
-        # output = self.lookupTable.forward(x)
-        output = x
-        # for i in range(9):
-        #     output = self.model[i].forward(output)
-        #     print output.size()
-        output = self.model[0].forward(output)
-        print("0: ",output.size())        
-        # sys.stdin.readline()
-        output = self.model[1].forward(output)
-        print("1: ",output.size())  
-        output = self.model[2].forward(output)
-        print("2: ",output.size())  
-        output = self.model[3].forward(output)
-        print("3: ",output.size())  
-        output = self.model[4].forward(output)
-        print("4: ",output.size())  
-        output = self.model[5].forward(output)
-        print("5: ",output.size())  
-        output = self.model[6].forward(output)
-        print("6: ",output.size())  
-        output = self.model[7].forward(output)
-        print("7: ",output.size())  
-        output = self.model[8].forward(output)
-        print("8: ",output.size())  
-        
-        # output = self.model.forward(x)
+        output = self.model.forward(x)
 
         return output
 
