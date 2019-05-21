@@ -175,6 +175,7 @@ for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
     update_vars = []
     fomaml_vars = []
     for task_id in selected_task:
+        print(task_id)
         (train_iter, dev_iter, test_iter) = datasets_iters[task_id]
         train_iter.init_epoch()
         model.train()
@@ -183,7 +184,7 @@ for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
         for inner_iter in range(Inner_epochs):
             batch = next(iter(train_iter))
 
-
+            print(batch.text)
             print(batch.label)
             logits = model(batch.text)
             loss = criterion(logits.view(-1, num_labels), batch.label.data.view(-1))
