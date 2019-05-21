@@ -5,20 +5,28 @@ import torch
 import torch.nn as nn
 # from AdaAdam import AdaAdam
 import torch.optim as OPT
+import numpy as np
+from copy import deepcopy
+from tqdm import tqdm, trange
+import logging
 
 from torchtext import data
 import DataProcessing
 from DataProcessing.MLTField import MTLField
-
 from DataProcessing.NlcDatasetSingleFile import NlcDatasetSingleFile
+from CNNModel import CNNModel
+
+
+logger = logging.getLogger(__name__)
 
 batch_size = 10
 seed = 12345678
-gpu = 1
 torch.manual_seed(seed)
 if torch.cuda.is_available():
-    torch.cuda.set_device(gpu)
     torch.cuda.manual_seed(seed)
+device = torch.device("cuda" if torch.cuda.is_available()  else "cpu")
+torch.cuda.set_device(-1)
+device = torch.device("cuda", -1)
 
 
 def load_train_test_files(listfilename, test_suffix='.test'):
@@ -63,7 +71,7 @@ datasets_iters = []
 
 for (TEXT, LABEL, train, dev, test) in datasets:
     train_iter, dev_iter, test_iter = data.BucketIterator.splits(
-        (train, dev, test), batch_size=batch_size, device=gpu)
+        (train, dev, test), batch_size=batch_size, device=device)
     train_iter.repeat = False
     datasets_iters.append((train_iter, dev_iter, test_iter))
 
@@ -77,7 +85,7 @@ for i, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
     print('vars(train[0])', vars(train[0]))
     num_batch_total += len(train) / batch_size
 
-TEXT.build_vocab(list_datasets, vectors=emfilename,  vectors_cache=emfiledir)
+TEXT.build_vocab(list_datasets, vectors=None,  vectors_cache=emfiledir)
 # TEXT.build_vocab(list_dataset)
 
 # build the vocabulary
@@ -96,3 +104,76 @@ for taskid, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
     #if taskid == 0:
     #    print LABEL.vocab.stoi
     #print len(LABEL.vocab.stoi)
+
+nums_embed = len(TEXT.vocab)
+dim_embed = 100
+dim_w_hid = 200
+dim_h_hid = 100
+Inner_lr = 2e-6
+Outer_lr = 1e-5
+
+n_labels = []
+for (TEXT, LABEL, train, dev, test) in datasets:
+   n_labels.append(len(LABEL.vocab))
+print(n_labels)
+num_tasks = len(n_labels)
+print("num_tasks", num_tasks)
+winsize = 3
+num_labels = len(LABEL.vocab.itos)
+model = CNNModel(nums_embed, num_labels, dim_embed, dim_w_hid, dim_h_hid, winsize, batch_size)
+
+print("GPU Device: ", device)
+model.to(device)
+
+criterion = nn.CrossEntropyLoss()
+opt = OPT.Adam(model.parameters(), lr=Inner_lr)
+Inner_epochs = 4
+epochs = 2
+n_correct = 0
+N_task = 5
+
+task_list = np.random.permutation(np.arange(num_tasks))
+print("Total Batch: ", num_batch_total)
+
+
+for t in trange(num_batch_total*epochs/Inner_epochs, desc="Iterations"):
+    selected_task = np.random.choice(task_list, N_task,replace=False)
+    weight_before = deepcopy(model.state_dict())
+    update_vars = []
+    fomaml_vars = []
+    for task_id in selected_task:
+        (train_iter, dev_iter, test_iter) = datasets_iters[task_id]
+        train_iter.init_epoch()
+        model.train()
+
+        for inner_iter in range(Inner_epochs):
+            batch = next(iter(train_iter))
+
+            logits = model(batch.text)
+            loss = criterion(logits.view(-1, num_labels), batch.label.data.view(-1))
+
+            n_correct += (torch.max(logits, 1)[1].view(batch.label.size()).data == batch.label.data).sum()
+            loss.backward()
+            opt.step()
+            opt.zero_grad()
+
+        weight_after = deepcopy(model.state_dict())
+        update_vars.append(weight_after)
+        model.load_state_dict(weight_before)
+
+    new_weight_dict = {}
+    for name in weight_before:
+        weight_list = [tmp_weight_dict[name] for tmp_weight_dict in update_vars]
+        weight_shape = list(weight_list[0].size())
+        stack_shape = [len(weight_list)] + weight_shape
+        stack_weight = torch.empty(stack_shape)
+        for i in range(len(weight_list)):
+            stack_weight[i,:] = weight_list[i] 
+        new_weight_dict[name] = torch.mean(stack_weight, dim=0).cuda()
+        new_weight_dict[name] = weight_before[name]+(new_weight_dict[name]-weight_before[name])/Inner_lr*Outer_lr
+    model.load_state_dict(new_weight_dict)
+
+output_model_file = '/tmp/CNN_MAML_output'
+torch.save(model.state_dict(), output_model_file)
+
+logger.info("")
