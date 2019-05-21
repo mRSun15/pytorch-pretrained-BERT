@@ -40,7 +40,7 @@ class Transpose(nn.Module):
                + 'between=' + str(self.dim1) + ',' + str(self.dim2) + ')'
 
 class CNNModel(nn.Module):
-    def __init__(self, vocab_size, num_labels, emb_size, w_hid_size, h_hid_size, win, with_proj=False):
+    def __init__(self, vocab_size, num_labels, emb_size, w_hid_size, h_hid_size, win, batch_size,with_proj=False):
         super(CNNModel, self).__init__()
 
         self.model = nn.Sequential()
