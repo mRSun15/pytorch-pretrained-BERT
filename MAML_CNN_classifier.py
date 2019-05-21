@@ -98,14 +98,14 @@ for taskid, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
         LABEL.vocab.stoi[k] = v - 1
 
     # print vocab information
-    print('len(TEXT.vocab)', len(TEXT.vocab))
-    print('TEXT.vocab.vectors.size()', TEXT.vocab.vectors.size())
+    # print('len(TEXT.vocab)', len(TEXT.vocab))
+    # print('TEXT.vocab.vectors.size()', TEXT.vocab.vectors.size())
 
-    print(LABEL.vocab.itos)
+    # print(LABEL.vocab.itos)
     # print(len(LABEL.vocab.itos))
     if taskid == 0:
        print(LABEL.vocab.stoi)
-    print(len(LABEL.vocab.stoi))
+    # print(len(LABEL.vocab.stoi))
 
 nums_embed = len(TEXT.vocab)
 dim_embed = 100
@@ -152,8 +152,11 @@ for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
         for inner_iter in range(Inner_epochs):
             batch = next(iter(train_iter))
 
+            print(batch.text.size())
+            print(batch.label.size())
             logits = model(batch.text)
             loss = criterion(logits.view(-1, num_labels), batch.label.data.view(-1))
+            
 
             n_correct += (torch.max(logits, 1)[1].view(batch.label.size()).data == batch.label.data).sum()
             loss.backward()
