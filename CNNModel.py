@@ -5,7 +5,7 @@ import sys
 
 class MaxPool(nn.Module):
     def __init__(self, dim=1):
-        super(Maxpool, self).__init__()
+        super(MaxPool, self).__init__()
         self.dim = dim
     
     def forward(self, input):
