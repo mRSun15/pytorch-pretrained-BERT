@@ -148,7 +148,7 @@ Outer_lr = 1e-5
 n_labels = []
 for (TEXT, LABEL, train, dev, test) in datasets:
    n_labels.append(len(LABEL.vocab))
-# print(n_labels)
+print(n_labels)
 num_tasks = len(n_labels)
 print("num_tasks", num_tasks)
 winsize = 3
@@ -183,8 +183,8 @@ for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
         for inner_iter in range(Inner_epochs):
             batch = next(iter(train_iter))
 
-            # print(batch.text.size())
-            # print(batch.label.size())
+            print(batch.text.size())
+            print(batch.label.size())
             logits = model(batch.text)
             loss = criterion(logits.view(-1, num_labels), batch.label.data.view(-1))
             
