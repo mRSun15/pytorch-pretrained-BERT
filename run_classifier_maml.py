@@ -969,10 +969,10 @@ def main():
     num_train_optimization_steps = None
     proto_hidden = 100
     Inner_epochs = 4
-    N_iteration = 4000
+    N_iteration = 2000
     N_shot = 5
     N_query = 3
-    N_task = 2
+    N_task = 5
     N_class = num_labels
     train_batch_s = 1
     Is_reptile = False
@@ -1019,7 +1019,7 @@ def main():
         task_rewards[task_id] = []
         last_observation[task_id] = 0
 
-    if args.do_train and False:
+    if args.do_train:
         task_list = np.random.permutation(np.arange(train_task_number))
         
         for epoch in trange(int(N_iteration), desc="Iterations"):
@@ -1149,13 +1149,13 @@ def main():
     loss_list = {}
     global_step = 0
     nb_tr_steps = 0
-    Meta_optimizer = optim.Adam(model.parameters(), lr=1e-5)
+    Meta_optimizer = optim.Adam(model.parameters(), lr=2e-5)
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         weight_before = deepcopy(model.state_dict())
         for task_id in trange(fsl_task_number, desc="Task"):
-            model.train()
-            for _ in range(3):
+            model.train() 
+            for _ in range(1):
                 support_examples = processor.get_fsl_support(args.data_dir, task_id)
                 support_features = convert_examples_to_features(
                     support_examples, label_list, args.max_seq_length, tokenizer, output_mode
