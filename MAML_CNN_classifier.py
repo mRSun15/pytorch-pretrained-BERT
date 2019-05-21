@@ -80,7 +80,7 @@ for (trainfile, devfile, testfile) in target_file:
     LABEL2 = data.Field(sequential=False)
     train2, dev2, test2 = NlcDatasetSingleFile.splits(TEXT, LABEL2, path=workingdir, 
     train=trainfile,validation=devfile, test=testfile)
-    target_datasets,append((TEXT, LABEL2, train2, dev2, test2))
+    target_datasets.append((TEXT, LABEL2, train2, dev2, test2))
 
     
 
