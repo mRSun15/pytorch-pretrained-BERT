@@ -100,13 +100,17 @@ for (TEXT, LABEL, train, dev, test) in target_datasets:
 
 num_batch_total = 0
 for i, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
-    print('DATASET%d'%(i+1))
-    print('train.fields', train.fields)
-    print('len(train)', len(train))
+    # print('DATASET%d'%(i+1))
+    # print('train.fields', train.fields)
+    # print('len(train)', len(train))
     # print('len(dev)', len(dev))
     # print('len(test)', len(test))
     # print('vars(train[0])', vars(train[0]))
     num_batch_total += len(train) / batch_size
+for i, (TEXT, LABEL, train, dev, test) in enumerate(target_datasets):
+    print('DATASET%d'%(i+1))
+    print('train.fields', train.fields)
+    print('len(train)', len(train))
 
 TEXT.build_vocab(list_datasets, vectors = emfilename, vectors_cache = emfiledir)
 # TEXT.build_vocab(list_dataset)
