@@ -138,7 +138,7 @@ task_list = np.random.permutation(np.arange(num_tasks))
 print("Total Batch: ", num_batch_total)
 
 
-for t in trange(num_batch_total*epochs/Inner_epochs, desc="Iterations"):
+for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
     selected_task = np.random.choice(task_list, N_task,replace=False)
     weight_before = deepcopy(model.state_dict())
     update_vars = []
