@@ -998,7 +998,7 @@ def main():
     print("Whether Initialize the model?")
     if args.is_init:
         print("Initializing........")
-        model.init_bert_weights()
+        model.apply(init_bert_weights)
     if args.fp16:
         model.half()
     model.to(device)
