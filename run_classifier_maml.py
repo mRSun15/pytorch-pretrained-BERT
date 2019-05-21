@@ -801,6 +801,10 @@ def main():
                         help="The output directory where the model predictions and checkpoints will be written.")
 
     ## Other parameters
+    parser.add_argument("--is_reptile",
+                        default=True,
+                        type=bool,
+                        help="whether use reptile or fomaml method")
     parser.add_argument("--cache_dir",
                         default="",
                         type=str,
@@ -975,7 +979,7 @@ def main():
     N_task = 5
     N_class = num_labels
     train_batch_s = 1
-    Is_reptile = False
+    Is_reptile = args.is_reptile
     if args.do_train :
         # train_examples = processor.get_train_examples(args.data_dir)
         num_train_optimization_steps = N_iteration*(N_shot+N_query)*N_class*N_task
