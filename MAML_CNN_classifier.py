@@ -110,10 +110,6 @@ for i, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
     # print('len(test)', len(test))
     # print('vars(train[0])', vars(train[0]))
     num_batch_total += len(train) / batch_size
-for i, (TEXT, LABEL, train, dev, test) in enumerate(target_datasets):
-    print('DATASET%d'%(i+1))
-    print('train.fields', train.fields)
-    print('len(train)', len(train))
 
 TEXT.build_vocab(list_datasets, vectors = emfilename, vectors_cache = emfiledir)
 # TEXT.build_vocab(list_dataset)
@@ -152,7 +148,7 @@ Outer_lr = 1e-5
 n_labels = []
 for (TEXT, LABEL, train, dev, test) in datasets:
    n_labels.append(len(LABEL.vocab))
-print(n_labels)
+# print(n_labels)
 num_tasks = len(n_labels)
 print("num_tasks", num_tasks)
 winsize = 3
@@ -173,14 +169,12 @@ N_task = 5
 task_list = np.arange(num_tasks)
 print("Total Batch: ", num_batch_total)
 
-num_batch_total = 10
 for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
     selected_task = np.random.choice(task_list, N_task,replace=False)
     weight_before = deepcopy(model.state_dict())
     update_vars = []
     fomaml_vars = []
     for task_id in selected_task:
-        print("task_id", task_id)
         (train_iter, dev_iter, test_iter) = datasets_iters[task_id]
         train_iter.init_epoch()
         model.train()
