@@ -801,6 +801,10 @@ def main():
                         help="The output directory where the model predictions and checkpoints will be written.")
 
     ## Other parameters
+    parser.add_argument("--is_init",
+                        default=False,
+                        type=bool,
+                        help="whether initialize the model")
     parser.add_argument("--is_reptile",
                         default=True,
                         type=bool,
@@ -991,6 +995,8 @@ def main():
     model = BertForSequenceClassification.from_pretrained(args.bert_model,
               cache_dir=cache_dir,
               num_labels=num_labels) # num_labels as proto_network's embedding size
+    if args.is_init:
+        model.init_bert_weights()
     if args.fp16:
         model.half()
     model.to(device)
