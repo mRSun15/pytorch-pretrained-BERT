@@ -22,12 +22,14 @@ logger = logging.getLogger(__name__)
 batch_size = 10
 seed = 12345678
 torch.manual_seed(seed)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed(seed)
+    
 device = torch.device("cuda" if torch.cuda.is_available()  else "cpu")
-torch.cuda.set_device(-1)
-device = torch.device("cuda", -1)
-
+n_gpu = torch.cuda.device_count()
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+if n_gpu > 0:
+    torch.cuda.manual_seed_all(seed)
 
 def load_train_test_files(listfilename, test_suffix='.test'):
     filein = open(listfilename, 'r')
