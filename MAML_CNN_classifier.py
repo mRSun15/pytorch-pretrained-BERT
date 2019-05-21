@@ -79,9 +79,9 @@ for (TEXT, LABEL, train, dev, test) in datasets:
 
 num_batch_total = 0
 for i, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
-    # print('DATASET%d'%(i+1))
-    # print('train.fields', train.fields)
-    # print('len(train)', len(train))
+    print('DATASET%d'%(i+1))
+    print('train.fields', train.fields)
+    print('len(train)', len(train))
     # print('len(dev)', len(dev))
     # print('len(test)', len(test))
     # print('vars(train[0])', vars(train[0]))
