@@ -22,4 +22,4 @@ python3 run_classifier_maml.py \
   --max_seq_length 128 \
   --inner_learning_rate 2e-6 \
   --outer_learning_rate 1e-5 \
-  --output_dir /tmp/Amazon_maml_output4/
+  --output_dir /tmp/Amazon_maml_output5/

@@ -1,3 +1,4 @@
+export GLUE_DIR="data/Amazon_few_shot"
 
 python3 ARSC_lm_finetuning.py \
 --train_corpus data/Amazon_corpus.txt \
