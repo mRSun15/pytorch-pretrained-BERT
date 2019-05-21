@@ -62,7 +62,7 @@ class CNNModel(nn.Module):
 
         self.model.add_module('max', MaxPool(2))
 
-        self.model.add_module('view4', View(batch_size, h_hid_size))
+        self.model.add_module('view4', View(batch_size, -1))
         self.model.add_module('linear2', nn.Linear(h_hid_size, num_labels))
         self.model.add_module('softmax', nn.LogSoftmax())
 
