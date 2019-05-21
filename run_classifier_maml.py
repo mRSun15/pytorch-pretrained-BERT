@@ -34,7 +34,7 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 
 from torch.nn import CrossEntropyLoss, MSELoss
-from scipy.stats import pearsonr, spearmanr
+# from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import matthews_corrcoef, f1_score
 from copy import deepcopy
 
@@ -723,14 +723,14 @@ def acc_and_f1(preds, labels):
     }
 
 
-def pearson_and_spearman(preds, labels):
-    pearson_corr = pearsonr(preds, labels)[0]
-    spearman_corr = spearmanr(preds, labels)[0]
-    return {
-        "pearson": pearson_corr,
-        "spearmanr": spearman_corr,
-        "corr": (pearson_corr + spearman_corr) / 2,
-    }
+# def pearson_and_spearman(preds, labels):
+#     pearson_corr = pearsonr(preds, labels)[0]
+#     spearman_corr = spearmanr(preds, labels)[0]
+#     return {
+#         "pearson": pearson_corr,
+#         "spearmanr": spearman_corr,
+#         "corr": (pearson_corr + spearman_corr) / 2,
+#     }
 
 def get_train_prob(reward_prob, K, epsilon):
     indices = np.argpartition(reward_prob, -K)[-K:]
@@ -749,8 +749,8 @@ def compute_metrics(task_name, preds, labels):
         return {"acc": simple_accuracy(preds, labels)}
     elif task_name == "mrpc":
         return acc_and_f1(preds, labels)
-    elif task_name == "sts-b":
-        return pearson_and_spearman(preds, labels)
+    # elif task_name == "sts-b":
+    #     return pearson_and_spearman(preds, labels)
     elif task_name == "qqp":
         return acc_and_f1(preds, labels)
     elif task_name == "mnli":
