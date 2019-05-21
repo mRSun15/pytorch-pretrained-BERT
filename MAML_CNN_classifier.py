@@ -145,6 +145,7 @@ for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
     update_vars = []
     fomaml_vars = []
     for task_id in selected_task:
+        print("task_id", task_id)
         (train_iter, dev_iter, test_iter) = datasets_iters[task_id]
         train_iter.init_epoch()
         model.train()
