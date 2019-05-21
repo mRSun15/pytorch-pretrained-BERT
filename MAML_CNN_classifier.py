@@ -98,13 +98,13 @@ for taskid, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
         LABEL.vocab.stoi[k] = v - 1
 
     # print vocab information
-    # print('len(TEXT.vocab)', len(TEXT.vocab))
+    print('len(TEXT.vocab)', len(TEXT.vocab))
     print('TEXT.vocab.vectors.size()', TEXT.vocab.vectors.size())
 
     print LABEL.vocab.itos
     # print(len(LABEL.vocab.itos))
-    #if taskid == 0:
-    #    print LABEL.vocab.stoi
+    if taskid == 0:
+       print LABEL.vocab.stoi
     print len(LABEL.vocab.stoi)
 
 nums_embed = len(TEXT.vocab)
