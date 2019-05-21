@@ -127,7 +127,7 @@ for taskid, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
 
     # print(LABEL.vocab.itos)
     # print(len(LABEL.vocab.itos))
-    if taskid == 0:
+    if taskid == 15:
        print(LABEL.vocab.stoi)
     # print(len(LABEL.vocab.stoi))
 fsl_num_tasks = 0
