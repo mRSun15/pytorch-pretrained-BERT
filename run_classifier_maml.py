@@ -848,6 +848,14 @@ def main():
                         default=1e-5,
                         type=float,
                         help="The meta learning rate for Adam, actual learning rate!")
+    parser.add_argument("--FSL_learning_rate",
+                        default=1e-5,
+                        type=float,
+                        help="The FSL learning rate for Adam!")           
+    parser.add_argument("--FSL_epochs",
+                        default=1,
+                        type=float,
+                        help="The FSL learning epochs for training!")                    
     parser.add_argument("--num_train_epochs",
                         default=2.0,
                         type=float,
@@ -1161,13 +1169,13 @@ def main():
     loss_list = {}
     global_step = 0
     nb_tr_steps = 0
-    Meta_optimizer = optim.Adam(model.parameters(), lr=2e-5)
+    Meta_optimizer = optim.Adam(model.parameters(), lr=args.FSL_learning_rate)
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         weight_before = deepcopy(model.state_dict())
         for task_id in trange(fsl_task_number, desc="Task"):
             model.train() 
-            for _ in range(1):
+            for _ in range(args.FSL_epochs):
                 support_examples = processor.get_fsl_support(args.data_dir, task_id)
                 support_features = convert_examples_to_features(
                     support_examples, label_list, args.max_seq_length, tokenizer, output_mode
