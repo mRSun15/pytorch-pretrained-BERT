@@ -69,7 +69,32 @@ class CNNModel(nn.Module):
 
     def forward(self, x):
 
-        output = self.model.forward(x)
+        # output = self.lookupTable.forward(x)
+        output = x
+        # for i in range(9):
+        #     output = self.model[i].forward(output)
+        #     print output.size()
+        output = self.model[0].forward(output)
+        print("0: ",output.size())        
+        # sys.stdin.readline()
+        output = self.model[1].forward(output)
+        print("1: ",output.size())  
+        output = self.model[2].forward(output)
+        print("2: ",output.size())  
+        output = self.model[3].forward(output)
+        print("3: ",output.size())  
+        output = self.model[4].forward(output)
+        print("4: ",output.size())  
+        output = self.model[5].forward(output)
+        print("5: ",output.size())  
+        output = self.model[6].forward(output)
+        print("6: ",output.size())  
+        output = self.model[7].forward(output)
+        print("7: ",output.size())  
+        output = self.model[8].forward(output)
+        print("8: ",output.size())  
+        
+        # output = self.model.forward(x)
 
         return output
 
