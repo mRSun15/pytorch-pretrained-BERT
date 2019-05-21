@@ -995,7 +995,9 @@ def main():
     model = BertForSequenceClassification.from_pretrained(args.bert_model,
               cache_dir=cache_dir,
               num_labels=num_labels) # num_labels as proto_network's embedding size
+    print("Whether Initialize the model?")
     if args.is_init:
+        print("Initializing........")
         model.init_bert_weights()
     if args.fp16:
         model.half()
