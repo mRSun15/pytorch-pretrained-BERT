@@ -87,7 +87,7 @@ for (trainfile, devfile, testfile) in target_file:
 datasets_iters = []
 for (TEXT, LABEL, train, dev, test) in datasets:
     train_iter, dev_iter, test_iter = data.BucketIterator.splits(
-        (train, dev, test), batch_size=batch_size, device=device)
+        (train, dev, test), batch_size=batch_size, device=device,shuffle=True)
     train_iter.repeat = False
     datasets_iters.append((train_iter, dev_iter, test_iter))
 
@@ -131,22 +131,13 @@ for taskid, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
     if taskid == 0:
        print(LABEL.vocab.stoi)
     # print(len(LABEL.vocab.stoi))
-
+fsl_num_tasks = 0
 for taskid, (TEXT, LABEL, train, dev, test) in enumerate(target_datasets):
+    fsl_num_tasks += 1
     LABEL.build_vocab(train, dev, test)
     LABEL.vocab.itos = LABEL.vocab.itos[1:]
     for k, v in LABEL.vocab.stoi.items():
         LABEL.vocab.stoi[k] = v - 1
-
-    # print vocab information
-    print('len(TEXT.vocab)', len(TEXT.vocab))
-    print('TEXT.vocab.vectors.size()', TEXT.vocab.vectors.size())
-
-    # print(LABEL.vocab.itos)
-    # print(len(LABEL.vocab.itos))
-    if taskid == 0:
-       print(LABEL.vocab.stoi)
-    # print(len(LABEL.vocab.stoi))
 
 nums_embed = len(TEXT.vocab)
 dim_embed = 100
@@ -173,13 +164,13 @@ criterion = nn.CrossEntropyLoss()
 opt = OPT.Adam(model.parameters(), lr=Inner_lr)
 Inner_epochs = 4
 epochs = 2
-n_correct = 0
+
 N_task = 5
 
-task_list = np.random.permutation(np.arange(num_tasks))
+task_list = np.arange(num_tasks)
 print("Total Batch: ", num_batch_total)
 
-
+num_batch_total = 10
 for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
     selected_task = np.random.choice(task_list, N_task,replace=False)
     weight_before = deepcopy(model.state_dict())
@@ -190,7 +181,8 @@ for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
         (train_iter, dev_iter, test_iter) = datasets_iters[task_id]
         train_iter.init_epoch()
         model.train()
-
+        n_correct = 0
+        n_step = 0
         for inner_iter in range(Inner_epochs):
             batch = next(iter(train_iter))
 
@@ -200,11 +192,14 @@ for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
             loss = criterion(logits.view(-1, num_labels), batch.label.data.view(-1))
             
 
-            n_correct += (torch.max(logits, 1)[1].view(batch.label.size()).data == batch.label.data).sum()
+            n_correct = (torch.max(logits, 1)[1].view(batch.label.size()).data == batch.label.data).sum()
+            n_step = batch.batch_size
             loss.backward()
             opt.step()
             opt.zero_grad()
-
+        task_acc = 100.*n_correct/n_step
+        if t%10 == 0:
+            logger.info("Iter: %d, task id: %d, train acc: %f", t, task_id, task_acc)
         weight_after = deepcopy(model.state_dict())
         update_vars.append(weight_after)
         model.load_state_dict(weight_before)
@@ -225,3 +220,41 @@ output_model_file = '/tmp/CNN_MAML_output'
 torch.save(model.state_dict(), output_model_file)
 
 logger.info("***** Running evaluation *****")
+fsl_task_list = np.arange(fsl_num_tasks)
+weight_before = deepcopy(model.state_dict())
+fsl_epochs = 3
+Total_acc = 0
+for task_id in fsl_task_list:
+    model.train()
+    (train_iter, dev_iter, test_iter) = fsl_ds_iters[task_id]
+    train_iter.init_epoch()
+    batch = next(iter(train_iter))
+    for i in range(fsl_epochs):
+        logits = model(batch.text)
+        loss = criterion(logits.view(-1, num_labels, batch.label.data.view(-1)))
+        n_correct = (torch.max(logits, 1)[1].view(batch.label.size()).data == batch.label.data).sum()
+        n_size = batch.batch_size
+        train_acc = 100. * n_correct / n_size
+        loss = criterion(logits, batch.label)
+        loss.backward()
+        opt.step()
+        opt.zero_grad()
+        logger.info("  Task id: %d, fsl epoch: %d, Acc: %f", task_id, i, train_acc)
+
+    model.eval()
+    test_iter.init_epoch()
+    n_correct = 0
+    n_size = 0
+    for test_batch_idx, test_batch in enumerate(test_iter):
+        with torch.no_grad():
+            logits = model(test_batch.text)
+        loss = criterion(logits.view(-1, num_labels, test_batch.label.data.view(-1)))
+        n_correct += (torch.max(logits, 1)[1].view(test_batch.label.size()).data == test_batch.label.data).sum()
+        n_size += test_batch.batch_size
+    test_acc = 100.* n_correct/n_size
+    logger.info("FSL test Accuracy: %f", test_acc)
+    Total_acc += test_acc
+
+print("Mean Accuracy is : ", Total_acc/fsl_num_tasks)
+
+        
