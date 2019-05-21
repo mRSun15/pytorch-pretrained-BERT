@@ -93,7 +93,7 @@ for (TEXT, LABEL, train, dev, test) in datasets:
 
 fsl_ds_iters = []
 for (TEXT, LABEL, train, dev, test) in target_datasets:
-    train_iter, dev_iter, test_iter = data.BucketIterator.split(
+    train_iter, dev_iter, test_iter = data.BucketIterator.splits(
         (train,dev, test), batch_size=batch_size, device=device)
     train_iter.repeat = False
     fsl_ds_iters.append((train_iter, dev_iter, test_iter))
