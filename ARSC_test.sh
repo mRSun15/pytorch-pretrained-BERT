@@ -34,3 +34,15 @@ python3 run_classifier_maml.py \
   --inner_learning_rate 2e-6 \
   --outer_learning_rate 1e-5 \
   --output_dir /tmp/Amazon_maml_no_pretrain/
+
+python3 run_classifier_maml.py \
+  --task_name Amazon \
+  --do_train \
+  --do_eval \
+  --do_lower_case \
+  --data_dir $GLUE_DIR \
+  --bert_model /tmp/finetuned_lm/ \
+  --max_seq_length 128 \
+  --inner_learning_rate 2e-6 \
+  --outer_learning_rate 1e-5 \
+  --output_dir /tmp/Amazon_maml_with_pretrain/
