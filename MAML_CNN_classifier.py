@@ -104,7 +104,7 @@ for taskid, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
     print(LABEL.vocab.itos)
     # print(len(LABEL.vocab.itos))
     if taskid == 0:
-       print LABEL.vocab.stoi
+       print(LABEL.vocab.stoi)
     print(len(LABEL.vocab.stoi))
 
 nums_embed = len(TEXT.vocab)
