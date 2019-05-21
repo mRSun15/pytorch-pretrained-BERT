@@ -23,6 +23,7 @@ import logging
 import os
 import random
 import sys
+import math
 
 import numpy as np
 import torch
@@ -556,19 +557,20 @@ class AmazonProcessor(DataProcessor):
             return support, query
         label_names = self.get_labels()
         true_train_indices = [i for i, e in enumerate(train_labels) if e == label_names[0]]
-        true_dev_indices = [i for i, e in enumerate(dev_labels) if e == label_names[0]]
         false_train_indices = [i for i, e in enumerate(train_labels) if e == label_names[1]]
-        false_dev_indices = [i for i, e in enumerate(dev_labels) if e == label_names[1]]
 
+        # true_dev_indices = [i for i, e in enumerate(dev_labels) if e == label_names[0]]
+        # false_dev_indices = [i for i, e in enumerate(dev_labels) if e == label_names[1]]
+        # print("dev examples number: ", len(dev_examples))
         for one_sample in range(B):
             select_indices = np.random.choice(true_train_indices, K, False)
             support.extend([train_examples[i] for i in select_indices])
-            select_indices = np.random.choice(true_dev_indices, Q, False)
-            query.extend([dev_examples[i] for i in select_indices])
+            # select_indices = np.random.choice(true_dev_indices, Q, False)
+            # query.extend([dev_examples[i] for i in select_indices])
             select_indices = np.random.choice(false_train_indices, K, False)
             support.extend([train_examples[i] for i in select_indices])
-            select_indices = np.random.choice(false_dev_indices, Q, False)
-            query.extend([dev_examples[i] for i in select_indices])
+            # select_indices = np.random.choice(false_dev_indices, Q, False)
+            # query.extend([dev_examples[i] for i in select_indices])
             
 
         return support, query
@@ -730,6 +732,14 @@ def pearson_and_spearman(preds, labels):
         "corr": (pearson_corr + spearman_corr) / 2,
     }
 
+def get_train_prob(reward_prob, K, epsilon):
+    indices = np.argpartition(reward_prob, -K)[-K:]
+    one_hot_prob = np.zeros((len(reward_prob)))
+    for ind in indices:
+        one_hot_prob[ind] = 1
+    one_hot_prob = epsilon*np.ones(len(reward_prob))+one_hot_prob
+
+    return one_hot_prob/np.sum(one_hot_prob)
 
 def compute_metrics(task_name, preds, labels):
     assert len(preds) == len(labels)
@@ -952,20 +962,20 @@ def main():
     print("load finished!")
     
     num_labels = len(label_list)
-    proto_hidden = 100
 
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
 
     train_examples = None
     num_train_optimization_steps = None
-
+    proto_hidden = 100
     Inner_epochs = 4
-    N_iteration = 10000
+    N_iteration = 4000
     N_shot = 5
     N_query = 3
-    N_task = 5
-    N_class = 2
+    N_task = 2
+    N_class = num_labels
     train_batch_s = 1
+    Is_reptile = False
     if args.do_train :
         # train_examples = processor.get_train_examples(args.data_dir)
         num_train_optimization_steps = N_iteration*(N_shot+N_query)*N_class*N_task
@@ -976,7 +986,7 @@ def main():
     cache_dir = args.cache_dir if args.cache_dir else os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), 'distributed_{}'.format(args.local_rank))
     model = BertForSequenceClassification.from_pretrained(args.bert_model,
               cache_dir=cache_dir,
-              num_labels=proto_hidden) # num_labels as proto_network's embedding size
+              num_labels=num_labels) # num_labels as proto_network's embedding size
     if args.fp16:
         model.half()
     model.to(device)
@@ -1001,18 +1011,35 @@ def main():
     #                         warmup=args.warmup_proportion,
     #                         t_total=num_train_optimization_steps)
     optimizer = optim.Adam(model.parameters(), lr=args.inner_learning_rate)
-    # Meta_optimizer = optim.Adam(model.parameters(), lr=args.outer_learning_rate)
+    K_last = 3
+    epsilon = 1e-6
+    task_rewards = {}
+    last_observation = {}
+    for task_id in range(train_task_number):
+        task_rewards[task_id] = []
+        last_observation[task_id] = 0
 
-    global_step = 0
-    nb_tr_steps = 0
-    # tr_loss = 0
-    if args.do_train :
+    if args.do_train and False:
         task_list = np.random.permutation(np.arange(train_task_number))
+        
         for epoch in trange(int(N_iteration), desc="Iterations"):
-            selected_tasks = np.random.choice(task_list, N_task, replace=False)
+            reward_prob = []
+            for task_id in task_list:
+                if len(task_rewards[task_id]) == 0:
+                    reward_prob.append(1)
+                elif len(task_rewards[task_id]) < K_last:
+                    reward_prob.append(abs(np.random.choice(task_rewards[task_id], 1)[0]))
+                else:
+                    reward_prob.append(abs(np.random.choice(task_rewards[task_id][-K_last:], 1)[0]))
+            # reward_prob = [math.exp(prob) for prob in reward_prob]
+            # reward_prob = [float(prob)/sum(reward_prob) for prob in reward_prob]
+            reward_prob = get_train_prob(reward_prob, N_task,epsilon)
+            selected_tasks = np.random.choice(task_list, N_task,replace=False)
             weight_before = deepcopy(model.state_dict())
             update_vars = []
+            fomaml_vars = []
             for task_id in tqdm(selected_tasks,desc="Task"):
+                task_acc = 0
                 for _ in range(Inner_epochs):
                     train_support, train_query = processor.get_next_batch(train_batch_s, N_class, N_shot, N_query, 'train', task_id)
                     support_features = convert_examples_to_features(
@@ -1025,19 +1052,22 @@ def main():
                         support_labels = torch.tensor([f.label_id for f in support_features], dtype=torch.long).to(device)
                     elif output_mode == "regression":
                         all_label_ids = torch.tensor([f.label_id for f in support_features], dtype=torch.float).to(device)
-
+                    last_backup = deepcopy(model.state_dict())
                     model.train()
                     # define a new function to compute loss values for both output_modes
                     logits = model(support_input_ids, support_seg_ids, support_mask_ids, labels=None)
-
+                    # print(logits.shape)
+                    # print(support_labels.shape)
                     if output_mode == "classification":
                         loss_fct = CrossEntropyLoss()
                         loss = loss_fct(logits.view(-1, num_labels), support_labels.view(-1))
                     elif output_mode == "regression":
                         loss_fct = MSELoss()
                         loss = loss_fct(logits.view(-1), support_labels.view(-1))
-                    
-                    # result = compute_metrics(task_name, pred.cpu().numpy(), query_labels.cpu().numpy())
+
+                    preds = logits.detach().cpu().numpy()
+                    result = compute_metrics(task_name, np.argmax(preds, axis=1), support_labels.detach().cpu().numpy())
+                    task_acc = result['acc']
                     # logger.info("Batch %d ,Accuracy: %s", step,result["acc"])
 
                     if n_gpu > 1:
@@ -1048,13 +1078,41 @@ def main():
                     loss.backward()
                     optimizer.step()
                     optimizer.zero_grad()
+
                 weight_after = deepcopy(model.state_dict())
                 update_vars.append(weight_after)
+                tmp_fomaml_var = {}
+
+                task_rewards[task_id].append(task_acc-last_observation[task_id])
+                last_observation[task_id] = task_acc
+
+                if not Is_reptile:
+                    for name in weight_after:
+                        tmp_fomaml_var[name] = weight_after[name]-last_backup[name]
+                    fomaml_vars.append(tmp_fomaml_var)
                 model.load_state_dict(weight_before)
             new_weight_dict = {}
-            for name in weight_before:
-                new_weight_dict[name] = float(np.mean(list([tmp_weight_dict[name] for tmp_weight_dict in update_vars])))
-                new_weight_dict[name] = weight_before[name]+((new_weight_dict[name]-weight_before)/args.inner_learning_rate)*args.outer_learning_rate
+            # print(weight_before)
+            if Is_reptile:
+                for name in weight_before:
+                    weight_list = [tmp_weight_dict[name] for tmp_weight_dict in update_vars]
+                    weight_shape = list(weight_list[0].size())
+                    stack_shape = [len(weight_list)] + weight_shape
+                    stack_weight = torch.empty(stack_shape)
+                    for i in range(len(weight_list)):
+                        stack_weight[i,:] = weight_list[i] 
+                    new_weight_dict[name] = torch.mean(stack_weight, dim=0).cuda()
+                    new_weight_dict[name] = weight_before[name]+(new_weight_dict[name]-weight_before[name])/args.inner_learning_rate*args.outer_learning_rate
+            else:
+                for name in weight_before: 
+                    weight_list = [tmp_weight_dict[name] for tmp_weight_dict in fomaml_vars]
+                    weight_shape = list(weight_list[0].size())
+                    stack_shape = [len(weight_list)] + weight_shape
+                    stack_weight = torch.empty(stack_shape)
+                    for i in range(len(weight_list)):
+                        stack_weight[i,:] = weight_list[i]
+                    new_weight_dict[name] = torch.mean(stack_weight, dim=0).cuda()
+                    new_weight_dict[name] = weight_before[name]+new_weight_dict[name]/args.inner_learning_rate*args.outer_learning_rate
             model.load_state_dict(new_weight_dict)
             # ###MAML code
             # update_lr = 5e-2
@@ -1081,33 +1139,40 @@ def main():
         tokenizer.save_vocabulary(args.output_dir)
 
         # Load a trained model and vocabulary that you have fine-tuned
-        model = BertForSequenceClassification.from_pretrained(args.output_dir, num_labels=proto_hidden)
+        model = BertForSequenceClassification.from_pretrained(args.output_dir, num_labels=num_labels)
         tokenizer = BertTokenizer.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
     else:
-        model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=proto_hidden)
+        model = BertForSequenceClassification.from_pretrained(args.bert_model, num_labels=num_labels)
     model.to(device)
 
 
     loss_list = {}
+    global_step = 0
+    nb_tr_steps = 0
+    Meta_optimizer = optim.Adam(model.parameters(), lr=1e-5)
+
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         weight_before = deepcopy(model.state_dict())
         for task_id in trange(fsl_task_number, desc="Task"):
-            for _ in range(Inner_epochs):
+            model.train()
+            for _ in range(2):
                 support_examples = processor.get_fsl_support(args.data_dir, task_id)
                 support_features = convert_examples_to_features(
                     support_examples, label_list, args.max_seq_length, tokenizer, output_mode
                 )
-                model.train()
                 support_input = torch.tensor([f.input_ids for f in support_features], dtype=torch.long).to(device)
                 support_mask = torch.tensor([f.input_mask for f in support_features], dtype=torch.long).to(device)
                 support_seg = torch.tensor([f.segment_ids for f in support_features], dtype=torch.long).to(device)
                 support_labels = torch.tensor([f.label_id for f in support_features], dtype=torch.long).to(device)
                 
                 logits = model(support_input, support_seg, support_mask, labels=None)
-                loss = CrossEntropyLoss(logits.view(-1, num_labels), support_labels.view(-1))
+                loss = CrossEntropyLoss()
+                loss = loss(logits.view(-1, num_labels), support_labels.view(-1))
                 loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()
+                # print("Current loss: ", loss)
+                # print("fsl training!")
+                Meta_optimizer.step()
+                Meta_optimizer.zero_grad()
 
             eval_examples,_ = processor.get_fsl_test_examples(args.data_dir, task_id)
             eval_features = convert_examples_to_features(
@@ -1133,9 +1198,6 @@ def main():
             eval_loss = 0
             nb_eval_steps = 0
             preds = []
-            
-            proto_result = compute_metrics(task_name, pred.cpu().numpy(), support_labels.numpy())
-            print("Support Set's Accuracy: ", proto_result)
 
             for input_ids, input_mask, segment_ids, label_ids in tqdm(eval_dataloader, desc="Evaluating"):
                 input_ids = input_ids.to(device)
