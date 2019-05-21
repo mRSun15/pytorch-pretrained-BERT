@@ -47,6 +47,7 @@ def load_train_test_files(listfilename, test_suffix='.test'):
     return file_tuples
 
 filelist = 'data/Amazon_few_shot/workspace.filtered.list'
+targetlist = 'data/Amazon_few_shot/workspace.target.list'
 workingdir = 'data/Amazon_few_shot'
 emfilename = 'glove.6B.300d'
 emfiledir = '..'
@@ -54,10 +55,11 @@ emfiledir = '..'
 datasets = []
 list_datasets = []
 
+
 file_tuples = load_train_test_files(filelist)
 print(file_tuples)
-TEXT = MTLField(lower=True)
 
+TEXT = MTLField(lower=True)
 for (trainfile, devfile, testfile) in file_tuples:
     print(trainfile, devfile, testfile)
     LABEL1 = data.Field(sequential=False)
@@ -69,13 +71,34 @@ for (trainfile, devfile, testfile) in file_tuples:
     list_datasets.append(dev1)
     list_datasets.append(test1)
 
-datasets_iters = []
+target_datasets = []
+target_list_datasets = []
+target_file = load_train_test_files(targetlist)
+print(target_file)
 
+for (trainfile, devfile, testfile) in target_file:
+    print(trainfile, devfile, testfile)
+    LABEL2 = data.Field(sequential=False)
+    train2, dev2, test2 = NlcDatasetSingleFile.splits(TEXT, LABEL2, path=workingdir, 
+    train=trainfile,validation=devfile, test=testfile)
+    target_datasets.append(train2)
+    target_datasets.append(dev2)
+    target_datasets.append(test2)
+    
+
+datasets_iters = []
 for (TEXT, LABEL, train, dev, test) in datasets:
     train_iter, dev_iter, test_iter = data.BucketIterator.splits(
         (train, dev, test), batch_size=batch_size, device=device)
     train_iter.repeat = False
     datasets_iters.append((train_iter, dev_iter, test_iter))
+
+fsl_ds_iters = []
+for (TEXT, LABEL, train, dev, test) in target_datasets:
+    train_iter, dev_iter, test_iter = data.BucketIterator.split(
+        (train,dev, test), batch_size=batch_size, device=device)
+    train_iter.repeat = False
+    fsl_ds_iters.append((train_iter, dev_iter, test_iter))
 
 num_batch_total = 0
 for i, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
@@ -100,6 +123,22 @@ for taskid, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
     # print vocab information
     # print('len(TEXT.vocab)', len(TEXT.vocab))
     # print('TEXT.vocab.vectors.size()', TEXT.vocab.vectors.size())
+
+    # print(LABEL.vocab.itos)
+    # print(len(LABEL.vocab.itos))
+    if taskid == 0:
+       print(LABEL.vocab.stoi)
+    # print(len(LABEL.vocab.stoi))
+
+for taskid, (TEXT, LABEL, train, dev, test) in enumerate(target_datasets):
+    LABEL.build_vocab(train, dev, test)
+    LABEL.vocab.itos = LABEL.vocab.itos[1:]
+    for k, v in LABEL.vocab.stoi.items():
+        LABEL.vocab.stoi[k] = v - 1
+
+    # print vocab information
+    print('len(TEXT.vocab)', len(TEXT.vocab))
+    print('TEXT.vocab.vectors.size()', TEXT.vocab.vectors.size())
 
     # print(LABEL.vocab.itos)
     # print(len(LABEL.vocab.itos))
@@ -183,4 +222,4 @@ for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
 output_model_file = '/tmp/CNN_MAML_output'
 torch.save(model.state_dict(), output_model_file)
 
-logger.info("")
+logger.info("***** Running evaluation *****")
