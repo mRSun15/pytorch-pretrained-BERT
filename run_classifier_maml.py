@@ -44,7 +44,7 @@ from pytorch_pretrained_bert.tokenization import BertTokenizer
 from pytorch_pretrained_bert.optimization import BertAdam, WarmupLinearSchedule
 
 logger = logging.getLogger(__name__)
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 class InputExample(object):
