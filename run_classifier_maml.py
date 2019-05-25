@@ -806,7 +806,7 @@ def main():
                         type=bool,
                         help="whether initialize the model")
     parser.add_argument("--is_reptile",
-                        default=True,
+                        default=False,
                         type=bool,
                         help="whether use reptile or fomaml method")
     parser.add_argument("--cache_dir",
