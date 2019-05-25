@@ -849,7 +849,7 @@ def main():
                         type=float,
                         help="The meta learning rate for Adam, actual learning rate!")
     parser.add_argument("--FSL_learning_rate",
-                        default=1e-5,
+                        default=2e-5,
                         type=float,
                         help="The FSL learning rate for Adam!")           
     parser.add_argument("--FSL_epochs",
