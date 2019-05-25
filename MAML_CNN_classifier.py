@@ -25,7 +25,9 @@ logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(messa
 batch_size = 10
 seed = 12345678
 torch.manual_seed(seed)
-    
+Train = False
+
+
 device = torch.device("cuda" if torch.cuda.is_available()  else "cpu")
 n_gpu = torch.cuda.device_count()
 random.seed(seed)
@@ -118,6 +120,7 @@ TEXT.build_vocab(list_datasets, vectors = emfilename, vectors_cache = emfiledir)
 for taskid, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
     LABEL.build_vocab(train, dev, test)
     LABEL.vocab.itos = LABEL.vocab.itos[1:]
+
     for k, v in LABEL.vocab.stoi.items():
         LABEL.vocab.stoi[k] = v - 1
 
@@ -127,8 +130,7 @@ for taskid, (TEXT, LABEL, train, dev, test) in enumerate(datasets):
 
     # print(LABEL.vocab.itos)
     # print(len(LABEL.vocab.itos))
-    if taskid == 15:
-       print(LABEL.vocab.stoi)
+
     # print(len(LABEL.vocab.stoi))
 fsl_num_tasks = 0
 for taskid, (TEXT, LABEL, train, dev, test) in enumerate(target_datasets):
@@ -168,60 +170,64 @@ N_task = 5
 
 task_list = np.arange(num_tasks)
 print("Total Batch: ", num_batch_total)
-
-for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
-    selected_task = np.random.choice(task_list, N_task,replace=False)
-    weight_before = deepcopy(model.state_dict())
-    update_vars = []
-    fomaml_vars = []
-    for task_id in selected_task:
-        print(task_id)
-        (train_iter, dev_iter, test_iter) = datasets_iters[task_id]
-        train_iter.init_epoch()
-        model.train()
-        n_correct = 0
-        n_step = 0
-        for inner_iter in range(Inner_epochs):
-            batch = next(iter(train_iter))
-
-            print(batch.text)
-            print(batch.label)
-            logits = model(batch.text)
-            loss = criterion(logits.view(-1, num_labels), batch.label.data.view(-1))
-            
-
-            n_correct = (torch.max(logits, 1)[1].view(batch.label.size()).data == batch.label.data).sum()
-            n_step = batch.batch_size
-            loss.backward()
-            opt.step()
-            opt.zero_grad()
-        task_acc = 100.*n_correct/n_step
-        if t%10 == 0:
-            logger.info("Iter: %d, task id: %d, train acc: %f", t, task_id, task_acc)
-        weight_after = deepcopy(model.state_dict())
-        update_vars.append(weight_after)
-        model.load_state_dict(weight_before)
-
-    new_weight_dict = {}
-    for name in weight_before:
-        weight_list = [tmp_weight_dict[name] for tmp_weight_dict in update_vars]
-        weight_shape = list(weight_list[0].size())
-        stack_shape = [len(weight_list)] + weight_shape
-        stack_weight = torch.empty(stack_shape)
-        for i in range(len(weight_list)):
-            stack_weight[i,:] = weight_list[i] 
-        new_weight_dict[name] = torch.mean(stack_weight, dim=0).cuda()
-        new_weight_dict[name] = weight_before[name]+(new_weight_dict[name]-weight_before[name])/Inner_lr*Outer_lr
-    model.load_state_dict(new_weight_dict)
-
 output_model_file = '/tmp/CNN_MAML_output'
-torch.save(model.state_dict(), output_model_file)
+if Train:
+    for t in trange(int(num_batch_total*epochs/Inner_epochs), desc="Iterations"):
+        selected_task = np.random.choice(task_list, N_task,replace=False)
+        weight_before = deepcopy(model.state_dict())
+        update_vars = []
+        fomaml_vars = []
+        for task_id in selected_task:
+            # print(task_id)
+            (train_iter, dev_iter, test_iter) = datasets_iters[task_id]
+            train_iter.init_epoch()
+            model.train()
+            n_correct = 0
+            n_step = 0
+            for inner_iter in range(Inner_epochs):
+                batch = next(iter(train_iter))
 
+                # print(batch.text)
+                # print(batch.label)
+                logits = model(batch.text)
+                loss = criterion(logits.view(-1, num_labels), batch.label.data.view(-1))
+                
+
+                n_correct = (torch.max(logits, 1)[1].view(batch.label.size()).data == batch.label.data).sum()
+                n_step = batch.batch_size
+                loss.backward()
+                opt.step()
+                opt.zero_grad()
+            task_acc = 100.*n_correct/n_step
+            if t%10 == 0:
+                logger.info("Iter: %d, task id: %d, train acc: %f", t, task_id, task_acc)
+            weight_after = deepcopy(model.state_dict())
+            update_vars.append(weight_after)
+            model.load_state_dict(weight_before)
+
+        new_weight_dict = {}
+        for name in weight_before:
+            weight_list = [tmp_weight_dict[name] for tmp_weight_dict in update_vars]
+            weight_shape = list(weight_list[0].size())
+            stack_shape = [len(weight_list)] + weight_shape
+            stack_weight = torch.empty(stack_shape)
+            for i in range(len(weight_list)):
+                stack_weight[i,:] = weight_list[i] 
+            new_weight_dict[name] = torch.mean(stack_weight, dim=0).cuda()
+            new_weight_dict[name] = weight_before[name]+(new_weight_dict[name]-weight_before[name])/Inner_lr*Outer_lr
+        model.load_state_dict(new_weight_dict)
+
+
+    torch.save(model.state_dict(), output_model_file)
+
+model.load_state_dict(torch.load(output_model_file))
 logger.info("***** Running evaluation *****")
 fsl_task_list = np.arange(fsl_num_tasks)
 weight_before = deepcopy(model.state_dict())
 fsl_epochs = 3
 Total_acc = 0
+opt = OPT.Adam(model.parameters(), lr=3e-4)
+
 for task_id in fsl_task_list:
     model.train()
     (train_iter, dev_iter, test_iter) = fsl_ds_iters[task_id]
@@ -233,11 +239,11 @@ for task_id in fsl_task_list:
         n_correct = (torch.max(logits, 1)[1].view(batch.label.size()).data == batch.label.data).sum()
         n_size = batch.batch_size
         train_acc = 100. * n_correct / n_size
-        loss = criterion(logits, batch.label)
+        loss = criterion(logits.view(-1, num_labels), batch.label.data.view(-1))
         loss.backward()
         opt.step()
         opt.zero_grad()
-        logger.info("  Task id: %d, fsl epoch: %d, Acc: %f", task_id, i, train_acc)
+        logger.info("  Task id: %d, fsl epoch: %d, Acc: %f, loss: %f", task_id, i, train_acc, loss)
 
     model.eval()
     test_iter.init_epoch()
@@ -250,9 +256,10 @@ for task_id in fsl_task_list:
         n_correct += (torch.max(logits, 1)[1].view(test_batch.label.size()).data == test_batch.label.data).sum()
         n_size += test_batch.batch_size
     test_acc = 100.* n_correct/n_size
-    logger.info("FSL test Accuracy: %f", test_acc)
+    logger.info("FSL test Number: %d, Accuracy: %f",n_size, test_acc)
     Total_acc += test_acc
+    model.load_state_dict(weight_before)
 
-print("Mean Accuracy is : ", Total_acc/fsl_num_tasks)
+print("Mean Accuracy is : ", float(Total_acc)/fsl_num_tasks)
 
         
