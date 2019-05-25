@@ -43,8 +43,8 @@ python3 run_classifier_maml.py \
   --do_eval \
   --do_lower_case \
   --data_dir $GLUE_DIR \
-  --bert_model /tmp/Amazon_maml_with_pretrain/ \
+  --bert_model /tmp/Amazon_fomaml_with_pretrain/ \
   --max_seq_length 128 \
   --inner_learning_rate 2e-6 \
   --outer_learning_rate 1e-5 \
-  --output_dir /tmp/Amazon_maml_with_pretrain1/
+  --output_dir /tmp/Amazon_fomaml_with_pretrain1/
