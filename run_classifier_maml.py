@@ -419,10 +419,13 @@ class AmazonProcessor(DataProcessor):
         return self.train_task_num, self.test_task_num
 
     def _read_file(self,dataname):
+        
         with open(dataname, "r") as f:
             reader = csv.reader(f, delimiter="\t")
             lines = []
             for line in reader:
+                if dataname == "data/Amazon_few_shot/books.t5.test":
+                    print(lines[0], lines[1])
                 lines.append(line)
             return lines
 
