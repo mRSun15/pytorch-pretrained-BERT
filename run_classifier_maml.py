@@ -1260,7 +1260,7 @@ def main():
             if (task_id-1)%3 == 0:
                 for i in range(len(preds)):
                     print(i, "    ",preds[i], "    ", all_label_ids.numpy()[i], softmax_output)
-                    if preds[i] != all_label_ids.numpu()[i]:
+                    if preds[i] != all_label_ids.numpy()[i]:
                         print("Wrong Prediction! ")
                         print(eval_examples[i])
             result = compute_metrics(task_name, preds, all_label_ids.numpy())
