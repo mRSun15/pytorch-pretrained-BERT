@@ -425,7 +425,7 @@ class AmazonProcessor(DataProcessor):
             lines = []
             for line in reader:
                 if dataname == "data/Amazon_few_shot/books.t5.test":
-                    print(lines[0], lines[1])
+                    print(line[0], line[1])
                 lines.append(line)
             return lines
 
