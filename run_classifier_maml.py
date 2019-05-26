@@ -1262,7 +1262,7 @@ def main():
                     print(i, "    ",preds[i], "    ", all_label_ids.numpy()[i], softmax_output)
                     if preds[i] != all_label_ids.numpy()[i]:
                         print("Wrong Prediction! ")
-                        print(eval_examples[i])
+                        print(eval_examples[i].text_a)
             result = compute_metrics(task_name, preds, all_label_ids.numpy())
             # loss = tr_loss/nb_tr_steps if args.do_train else None
 
