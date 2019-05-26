@@ -1247,15 +1247,16 @@ def main():
 
             eval_loss = eval_loss / nb_eval_steps
             preds = preds[0]
-            print("Prediction    Labels")
-            if (task_id-1)%3 == 0:
-                for i in range(len(preds)):
-                    print(preds[i], "    ", all_label_ids.numpy()[i])
+
 
             if output_mode == "classification":
                 preds = np.argmax(preds, axis=1)
             elif output_mode == "regression":
                 preds = np.squeeze(preds)
+            print("Prediction    Labels")
+            if (task_id-1)%3 == 0:
+                for i in range(len(preds)):
+                    print(preds[i], "    ", all_label_ids.numpy()[i])
             result = compute_metrics(task_name, preds, all_label_ids.numpy())
             # loss = tr_loss/nb_tr_steps if args.do_train else None
 
