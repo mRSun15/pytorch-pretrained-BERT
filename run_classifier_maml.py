@@ -523,7 +523,7 @@ class AmazonProcessor(DataProcessor):
 
     def get_fsl_test_examples(self, data_dir,task_id=0):
         """See base class."""
-        return self._create_examples(self.fsl_dev[task_id],"test",task_id)
+        return self._create_examples(self.fsl_test[task_id],"test",task_id)
 
     def get_fsl_support(self, data_dir, task_id=0):
         examples, labels = self.get_fsl_train_examples(data_dir, task_id)
