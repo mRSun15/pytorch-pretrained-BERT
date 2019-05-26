@@ -424,8 +424,8 @@ class AmazonProcessor(DataProcessor):
             reader = csv.reader(f, delimiter="\t")
             lines = []
             for line in reader:
-                if dataname == "data/Amazon_few_shot/books.t5.test":
-                    print(line[0], line[1])
+                # if dataname == "data/Amazon_few_shot/books.t5.test":
+                #     print(line[0], line[1])
                 lines.append(line)
             return lines
 
