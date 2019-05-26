@@ -40,7 +40,6 @@ export GLUE_DIR="data/Amazon_few_shot"
 python3 run_classifier_maml.py \
   --task_name Amazon \
   --do_eval \
-  --do_train \
   --do_lower_case \
   --data_dir $GLUE_DIR \
   --bert_model /tmp/finetuned_lm/ \
